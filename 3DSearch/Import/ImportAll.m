@@ -1,0 +1,98 @@
+% ImportAll
+%
+% - This script handles the whole of analysis so far!  
+% 
+% Created 8/18/10 by DJ.
+% Updated 8/20/10 by DJ - expanded.
+% Updated 8/24/10 by DJ - tested and fixed.
+% Updated 9/29/10 by DJ - added "start EEGLAB" section, switched to
+% 'appear' datasets in "analyze and plot" section.
+% Updated 11/2/10 by DJ - added RemoveFrontalElectrodes
+% Updated 11/3/10 by DJ - added Azloo output
+% Updated 11/4/10 by DJ - added SaveLooResults
+% Updated 11/8/10 by DJ - updated SaveLooResults input
+% Updated 11/16/10 by DJ - switched to Import_3DS_Data_v3
+% Updated 11/30/10 by DJ - switched to function versions
+% Updated 2/23/11 by DJ - switched to function versions of AddEeglabEvents,
+% CombineEeglabSessions, added pixelThresholds and timeLimits
+% Updated 2/28/11 by DJ - switched to function versions of EpochEeglabFile,
+% RemoveEyeBlinkTrials
+% Updated 3/2/11 by DJ - switched to function versions of
+% ImportEyeCalibration, UseEyeCalibration
+% Updated 3/15/11 by DJ - whichDatasets now ordered [distractors targets]
+% Updated 7/27/11 by DJ - work with new version of RemoveEyeBlinkTrials and
+% ExcludeTrialsByCutoff.
+
+%% Start EEGLAB
+% eeglab;
+% filetype = 'Biosemi';
+filetype = 'Sensorium-2011';
+
+%% Import 3DS sessions
+pixelThresholds = 1000; % distance to object threshold to be considered a saccade-to-object [50 100 150]
+timeLimits = [0 Inf]; % time between stim and saccade to be considered a saccade-to-object [0 200]
+for i=1:numel(sessions)
+    session = sessions(i);
+    eegSession = eegSessions(i);
+    Import_3DS_Data_v3(subject,session,eegSession,filetype,pixelThresholds,timeLimits);
+    ImportToEeglab(subject,session,eegSession,filetype);
+    AddEeglabEvents(subject,session,'-filtered','OddballTask');
+end
+%Combine sessions
+CombineEeglabSessions(subject,sessions);
+% RemoveElectrodes(sprintf('3DS-%d-all-filtered.set',subject),sprintf('3DS-%d-all-filtered.set',subject),{'PO2'});
+% clean up
+clear i pixelThresholds timeLimits
+
+%% Remove eye artifacts
+if ~exist('eyeSession')
+    eyeSession = 1;
+end
+[~, eye_filename] = ImportEyeCalibration(subject,eyeSession,filetype);
+% RemoveElectrodes(eye_filename,eye_filename,{'PO2'});
+search_filename = sprintf('3DS-%d-all-filtered.set',subject);
+eyeremoved_filename = sprintf('3DS-%d-all-eyeremoved.set',subject);
+refChans = 'None';
+UseEyeCalibration(search_filename,eye_filename,eyeremoved_filename,refChans); % creates 'eyeremoved' dataset
+
+% RemoveFrontalElectrodes(search_filename, sprintf('3DS-%d-all-nofrontal.set',subject), filetype); % creates 'nofrontal' dataset
+clear eye_filename search_filename eyeremoved_filename
+
+%% Analyze
+% rereference desired file, then split into epochs
+version = 'filtered';
+filename = sprintf('3DS-%d-all-%s.set',subject,version);
+[ALLEEG, EEG, CURRENTSET] = EpochEeglabFile(filename,[-500 1000],[-200 0]);
+% v_cutoff = 50; % any trial containing voltages above this will be removed by ExcludeTrialsByCutoff
+% cutoff_times = [0 1000]; % the time window to check for the cutoff voltage
+
+for i=2:numel(ALLEEG)
+    % load dataset
+    [ALLEEG EEG CURRENTSET] = pop_newset(ALLEEG, EEG, CURRENTSET,'retrieve',i,'study',0); 
+    % Remove blink trials
+    EEG = RemoveEyeBlinkTrials(EEG,bad_event,t_window,[]);
+%     PlotExclusionHistogram(EEG.data,EEG.times,cutoff_times);
+%     EEG = ExcludeTrialsByCutoff(EEG, v_cutoff, cutoff_times,[]);
+    % Store results (but do not save)
+    [ALLEEG EEG CURRENTSET] = pop_newset(ALLEEG, EEG, CURRENTSET,'overwrite','on','gui','off'); 
+    EEG = eeg_checkset( EEG );
+end
+clear v_cutoff cutoff_times
+
+%% Plot
+whichDatasets = [5 4]; % [3 2] for saccade times, [5 4] for appear times - order is for [distractors=0, targets=1] in logist()
+bootstrap = false; % scramble truth labels to get bootstrapping results
+doLOO = true; % perform leave-one-out analysis
+samplesPerWindow = 13; % at sampling rate of 256: 50.8ms
+samplesPerShift = 3; % at sampling rate of 256: 11.7ms
+
+MakeErpMovie(ALLEEG,whichDatasets(2),whichDatasets(1)); % [targets distractors]
+[~, time, Azloo] = MakeLogRegMovie(ALLEEG,whichDatasets,1:ALLEEG(whichDatasets(1)).nbchan,samplesPerWindow,samplesPerShift,doLOO,bootstrap);
+
+if doLOO
+    % Save the results in the 'LOO.mat' file
+    SaveLooResults(ALLEEG(whichDatasets(1)),ALLEEG(whichDatasets(2)),time,Azloo,samplesPerWindow,samplesPerShift,datestr(now),bootstrap);
+end
+
+% clean up
+clear i doLOO whichDatasets samplesPerWindow samplesPerShift bootstrap % time Azloo

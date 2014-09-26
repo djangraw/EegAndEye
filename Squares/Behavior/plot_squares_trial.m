@@ -1,0 +1,149 @@
+function plot_squares_trial(sq,trial,doPause)
+
+% Plots the saccade positions from a single trial of a squares experiment.
+%
+% plot_squares_trial(sq,trial,doPause)
+%
+% INPUTS:
+% - sq is a squares behavior struct as imported by import_squares_data.
+% - trial is a scalar indicating the number of the trial you want to plot.
+% - doPause is a binary value indicating whether you want to pause between
+% each saccade to examine the time at which it occurred.
+%
+% Created 10/19/11 by DJ.
+% Updated 4/30/12 by DJ - comments, hide squares at end_trial point
+% Updated 2/12/13 by DJ - added time plot
+
+% Set up
+if nargin<3
+    doPause = false;
+end
+Constants = GetSquaresConstants;
+clf;
+
+% Draw time plot
+hTime = axes('Position',[.13 .11 .775 .15]);
+hold on;
+isTrialSac = sq.saccade.trialnum==trial;
+PlotVerticalLines(sq.saccade.end_time(isTrialSac & ~isnan(sq.saccade.squarenum))-sq.trial.start_time(trial),'k--');
+PlotVerticalLines(sq.saccade.end_time(isTrialSac & isnan(sq.saccade.squarenum))-sq.trial.start_time(trial),'k:');
+PlotVerticalLines([sq.trial.fix_time(trial), sq.trial.start_time(trial), sq.trial.end_time(trial), sq.trial.circle_time(trial)]...
+    -sq.trial.start_time(trial),'r');
+PlotVerticalLines(sq.trial.response_time(trial) - sq.trial.start_time(trial),'b');
+iTrialSac = find(isTrialSac);
+for i=1:numel(iTrialSac)
+    text(sq.saccade.end_time(iTrialSac(i))-sq.trial.start_time(trial),0.5,num2str(i));
+    text(sq.saccade.end_time(iTrialSac(i))-sq.trial.start_time(trial),0.25,num2str(sq.saccade.class(iTrialSac(i))));
+end
+xlabel('time from squares onset (ms)');
+set(hTime,'ytick',[],'yticklabel',[]);
+MakeLegend({'k--','k:','r','b'},{'Saccade to object','Saccade not to object','Stimulus change','response'});
+
+% Set up axes
+h = axes('Position',[.13 .31 .775 .615]);
+cla; axis([0 1024 0 768]); hold on;
+title(sprintf('Subject %d, Session %d, Trial %d\nfixation time %d, start time %d, end time %d',sq.subject,sq.session,trial,sq.trial.fix_time(trial),sq.trial.start_time(trial),sq.trial.end_time(trial)));
+% MakeLegend({'k--','k:'},{'Saccade to object','saccade not to object'});
+axes(h); % get back to main axis for plotting
+
+% Draw fixation cross and circle
+hbox = zeros(1,9);
+hbox(1) = rectangle('Position',[Constants.LEFTCROSS_X-sq.pixel_threshold, ...
+    Constants.LEFTCROSS_Y-sq.pixel_threshold, sq.pixel_threshold*2, ...
+    sq.pixel_threshold*2]);
+hbox(8) = rectangle('Position',[Constants.RIGHTCROSS_X-sq.pixel_threshold, ...
+    Constants.RIGHTCROSS_Y-sq.pixel_threshold, sq.pixel_threshold*2, ...
+    sq.pixel_threshold*2]);
+if sq.trial.is_right_cross(trial)
+    hbox(9) = text(Constants.RIGHTCROSS_X,Constants.RIGHTCROSS_Y,'+');
+    hbox(2) = text(Constants.LEFTCROSS_X,Constants.LEFTCROSS_Y,'o','Visible','off');
+    set(hbox(1),'Visible','off');
+else
+    hbox(2) = text(Constants.LEFTCROSS_X,Constants.LEFTCROSS_Y,'+');
+    hbox(9) = text(Constants.RIGHTCROSS_X,Constants.RIGHTCROSS_Y,'o','Visible','off');    
+    set(hbox(8),'Visible','off');
+end
+
+    
+% Draw squares
+for i=1:numel(Constants.SQUARE_X)
+    hbox(i+2) = rectangle('Position',[Constants.SQUARE_X(i)-sq.pixel_threshold, ...
+        Constants.SQUARE_Y(i)-sq.pixel_threshold, sq.pixel_threshold*2, ...
+        sq.pixel_threshold*2],'FaceColor',sq.trial.middle_color(trial,i),...
+        'Visible','off');
+end
+
+% Draw saccades
+iTrialSac = find(sq.saccade.trialnum==trial);
+for i=1:numel(iTrialSac)
+    iSac = iTrialSac(i);
+    
+    % Make squares visible
+    if sq.saccade.end_time(iSac)>=sq.trial.start_time(trial) && sq.saccade.end_time(iSac-1)<sq.trial.start_time(trial)
+        set(hbox,'Visible','on');
+    end
+    % Make squares invisible at end of trial
+    if sq.saccade.end_time(iSac)>=sq.trial.end_time(trial) && sq.saccade.end_time(iSac-1)<sq.trial.end_time(trial)
+        if sq.trial.is_right_cross(trial)
+            set(hbox(3:9),'Visible','off');
+        else
+            set(hbox(1:7),'Visible','off');
+        end
+    end
+    
+    % Plot saccade
+    if ~isnan(sq.saccade.squarenum(iSac))
+        plotface = 'k--';
+    else
+        plotface = 'k:';
+    end
+    plot([sq.saccade.start_position(iSac,1), sq.saccade.end_position(iSac,1)], ...
+        [sq.saccade.start_position(iSac,2), sq.saccade.end_position(iSac,2)],plotface);
+    text(sq.saccade.end_position(iSac,1), sq.saccade.end_position(iSac,2),num2str(i));
+    % Pause
+    if doPause, pause; end
+end 
+% Make everything visible again
+set(hbox,'Visible','on');
+
+% Log response time via most recent saccade
+buttonSac = find(sq.saccade.start_time(iTrialSac)<sq.trial.response_time(trial),1,'last');
+if isempty(buttonSac) || isnan(sq.trial.is_correct_response(trial))
+    text(10,760,'no response on this trial');
+elseif sq.trial.is_correct_response(trial)
+    text(10,760,sprintf('correct response after saccade %d',buttonSac));
+else
+    text(10,760,sprintf('incorrect response after saccade %d',buttonSac));
+end
+
+% Make prev/next buttons
+button_prev = uicontrol('Style','pushbutton',...
+    'units','normalized','Position',[.03 .5 .05 .05],...
+    'String','<','Callback',@callback_button_prev);
+button_next = uicontrol('Style','pushbutton',...
+    'units','normalized','Position',[.92 .5 .05 .05],...
+    'String','>','Callback', @callback_button_next);
+edit_goto = uicontrol('Style','edit',...
+    'units','normalized','Position',[.92 .45 .05 .05],...
+    'String',num2str(trial));
+button_go = uicontrol('Style','pushbutton',...
+    'units','normalized','Position',[.92 .4 .05 .05],...
+    'String','GO','Callback', @callback_button_goto);
+
+
+%%% BUTTON CALLBACK FUNCTIONS
+function callback_button_next(hObject,eventdata)
+    newtrial = min(trial+1,numel(sq.trial.start_time));
+    plot_squares_trial(sq,newtrial,doPause);    
+end
+function callback_button_prev(hObject,eventdata)
+    newtrial = max(trial-1,1);
+    plot_squares_trial(sq,newtrial,doPause);
+end
+function callback_button_goto(hObject,eventdata)
+    newtrial = str2double(get(edit_goto,'String'));
+    newtrial = min(newtrial,numel(sq.trial.start_time));
+    plot_squares_trial(sq,newtrial,doPause);
+end
+
+end

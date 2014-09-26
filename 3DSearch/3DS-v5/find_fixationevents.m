@@ -1,0 +1,49 @@
+function [timestamps avgpos] = find_fixationevents(text_file)
+
+% [timestamps avgpos] = find_fixationevents(text_file);
+%
+% - This function takes an eyelink text file and extracts the times when
+% fixations took place.
+% - The INPUT text_file should be the filename of the eyelink text file.
+% - To create the eyelink text file, run the .edf file created during a
+% 3D Search (3DS) experiment through the program Visual EDF2ASC.
+% - The OUTPUT timestamps will be an nx2 matrix, where n is the number of
+% fixations.  Each row contains the EyeLink timestamp of the start and end 
+% of a fixation.
+% - The OUTPUT avgpos will be an nx2 matrix, where n is the number of
+% fixations.  Each row contains the x and y position of the fixation.
+%
+% Created 9/13/10 by DJ.
+
+% Setup
+fid = fopen(text_file);
+fseek(fid,0,'eof'); % find end of file
+eof = ftell(fid);
+fseek(fid,0,'bof'); % rewind to beginning
+
+word = 'EFIX'; % the word we check for to find saccade events
+timestamps = []; % start with an empty array of timestamps
+avgpos = [];
+i = 0;          % number of elements currently in timestamps
+
+
+% Get the Timestamps
+while ftell(fid) < eof % if we haven't found our saccade marker
+    str = fgetl(fid); % read in another line from the text file
+    if findstr(str,word); % if this line contains a saccade timestamp
+        i = i+1; % increment the number of timestamps found
+        values = sscanf(str,'EFIX %*s %d %d %*d %f %f %*f'); % extract the saccade end time and end position from this regularly formatted line:
+        % (EFIX <eye> <starttime> <endtime> <duration> <avgxpos> <avgypos> <avgpupilsize>)        
+        timestamps(i,1:2) = values(1:2);
+        avgpos(i,1:2) = values(3:4);
+    end
+end
+
+% Did we find the word anywhere?
+if numel(timestamps) == 0 % if no
+    warning(sprintf('Couldn''t find ''%s'' anywhere in document ''%s''!'...
+        ,word,text_file))
+end
+
+% Clean up
+fclose(fid);

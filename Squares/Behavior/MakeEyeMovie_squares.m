@@ -1,0 +1,239 @@
+function h = MakeEyeMovie_squares(samples,pupilsize,x,t_start)
+
+% Makes a figure/UI for scrolling through eye position data like a movie.
+%
+% MakeEyeMovie_squares(samples,pupilsize,x)
+%
+% The dot represents the subject's eye position.  The dot's size represents
+% the reported pupil size.  The big rectangle is the limits of the screen.
+% The smaller rectangles represent the locations of squares on the
+% screen.
+%
+% Inputs:
+%   - samples is an nx2 matrix, where n is the number of samples of eye
+% position data. Each row is the (x,y) position of the eye at that time.
+% This will be the position of the dot on the screen.
+%   - pupilsize is an n-element vector, where each element is the size of
+% the subject's pupil (in unknown units).  This will be the size of the dot
+% on the screen.
+%   - x is a Squares data structure as imported by Import_Squares_Data.
+%
+% Outputs:
+%   - h is a struct containing the handles for various items on the
+% figure.  It can be used to get or change properties of the figures.  For 
+% example, type 'get(h.Plot)' to get the properties of the main movie.
+%
+% Created 2/8/13 by DJ based on MakeEyeMovie.m (3DSearch version)
+
+% -------- SETUP -------- %
+fs = 1000; % sampling frequency of eyelink (Hz)
+time = (1:length(samples))/fs; % time since beginning of eyelink sampling
+ps_reg = 50/nanmax(pupilsize); % factor we use to regularize pupil size
+screen_res = [1024, 768]; % size of screen in pixels (horizontal, vertical)
+if nargin<4
+    t_start = 1/fs;
+end
+% Undo drift correction to get back to raw data
+disp('Undoing drift correction...');
+x = undo_drift_correction(x);
+
+% Parse inputs
+% position info
+Constants = GetSquaresConstants;
+squares_pos = [Constants.SQUARE_X; Constants.SQUARE_Y]; % [x;y]
+anchor_pos = [Constants.LEFTCROSS_X, Constants.RIGHTCROSS_X; Constants.LEFTCROSS_Y, Constants.RIGHTCROSS_Y]; %[x;y];
+saccade_start_pos = x.saccade.start_position;
+saccade_end_pos = x.saccade.end_position;
+% Time info
+record_time = x.recording_start_time; % time 'offset' - the time when eyelink started recording.
+trial_times = ([x.trial.start_time, x.trial.end_time]-record_time)/1000; %[start end] in s
+anchor_times = ([x.trial.fix_time, x.trial.circle_time]-record_time)/1000; %[start end] in s
+saccade_times = ([x.saccade.start_time, x.saccade.end_time]-record_time)/1000; %[start end] in s
+% Stim info
+isTargetTrial = x.trial.is_target_trial;
+isTargetSquare = x.trial.is_target_color;
+isRightCross = x.trial.is_right_cross;
+
+
+colors = 'br';
+% Fix NaN problems
+pupilsize(isnan(pupilsize)) = 1; % set non-existent pupilsize measures (i.e. during blinks) to tiny dot size
+
+% -------- INITIAL PLOTTING -------- %
+disp('Setting up figure...');
+figure; % make a new figure
+MakeFigureTitle(x.eyeFilename,false);
+[~,iTime] = min(abs(time-t_start)); % the global index of the current time point - this is used throughout all functions
+
+% Main eye plot
+h.Plot = axes('Units','normalized','Position',[0.13 0.3 0.775 0.65]); % set position
+hold on;
+rectangle('Position',[0 0 screen_res]);
+h.Dot = plot(samples(iTime,1),samples(iTime,2),'k.','MarkerSize',pupilsize(iTime)*ps_reg);
+axis(h.Plot,[-200 screen_res(1)+200 -200 screen_res(2)+200]);
+[h.Squares, h.Cross, h.Circle, h.Saccade, h.iSac, h.iTrial] = deal([]);
+title(sprintf('t = %.3f s',time(iTime)));
+
+% -------- TIME SELECTION PLOT SETUP -------- %
+% 'Time plot' for selecting and observing current time
+h.Time = axes('Units','normalized','Position',[0.13 0.1 0.775 0.1],'Yticklabel',''); % set position
+hold on
+% Plot eye position
+plot(time,samples(:,1)/screen_res(1),'g','ButtonDownFcn',@time_callback); % plot eye position
+plot(time,samples(:,2)/screen_res(2),'y','ButtonDownFcn',@time_callback); % plot eye position
+% Plot horizontal lines when stimuli were visible
+nTrials = size(trial_times,1);
+trialspot = linspace(0,1,nTrials);
+for i=1:nTrials
+    plot((anchor_times(i,:)),[0 0]+trialspot(i),colors(isTargetTrial(i)+1),...   % plot a horizontal line at the time this object was visible
+        'ButtonDownFcn',@time_callback);      % color it as target/distractor and make it clickable
+end
+ylim([0 1])
+
+% Annotate plot
+plot([0 time(end)],[0 0],'k','ButtonDownFcn',@time_callback); % plot separation between plots
+xlim(h.Time,[0 time(end)]);
+xlabel('time (s)');
+ylabel('eye pos   |   trials'); % Top section is object visibility, bottom section is eye x position
+h.Line = plot(time([iTime iTime]), get(gca,'YLim'),'k','linewidth',2); % Line indicating current time
+set(h.Time,'ButtonDownFcn',@time_callback) % this must be called after plotting, or it will be overwritten
+
+% -------- GUI CONTROL SETUP -------- %
+disp('Making GUI controls...')
+h.Play = uicontrol('Style','togglebutton',...
+                'String','Play',...
+                'Units','normalized','Position',[.45 .2 .1 .05],...
+                'Callback',@play_callback); % play button
+h.Speed = uicontrol('Style','slider',...
+                'Min',1,'Max',100,'Value',1,'SliderStep',[.05 .2],...
+                'Units','normalized','Position',[.45 .25 .1 .025]); % speed slider
+h.SacBack = uicontrol('Style','pushbutton',...
+                'String','Sac <',...
+                'Units','normalized','Position',[.25 .2 .1 .05],...
+                'Callback',@sacback_callback); % back-to-last-saccade button
+h.Back = uicontrol('Style','pushbutton',...
+                'String','<',...
+                'Units','normalized','Position',[.38 .2 .05 .05],...
+                'Callback',@back_callback); % back button
+h.Fwd = uicontrol('Style','pushbutton',...
+                'String','>',...
+                'Units','normalized','Position',[.57 .2 .05 .05],...
+                'Callback',@fwd_callback); % forward button            
+h.SacFwd = uicontrol('Style','pushbutton',...
+                'String','> Sac',...
+                'Units','normalized','Position',[.65 .2 .1 .05],...
+                'Callback',@sacfwd_callback); % fwd-to-next-saccade button
+              
+disp('Done!')
+    
+% -------- SUBFUNCTIONS -------- %
+function redraw() % Update the line and topoplot
+    % Check that iTime is within allowable bounds
+    if iTime<1, iTime=1;
+    elseif iTime>numel(time), iTime = numel(time);
+    end
+    % Adjust plots
+    set(h.Line,'XData',time([iTime iTime]));
+    axes(h.Plot);
+    if isnan(pupilsize(iTime))
+        set(h.Dot,'MarkerSize',0.1)
+    else
+        set(h.Dot,'XData',samples(iTime,1),'YData',samples(iTime,2),'MarkerSize',pupilsize(iTime)*ps_reg);
+    end
+    
+    % Plot Saccade
+    saccade = find(time(iTime)>saccade_times(:,1) & time(iTime)<saccade_times(:,2),1);
+    if ~isequal(saccade,h.iSac)
+        delete(h.Saccade);
+        h.Saccade = [];
+        h.iSac = [];
+    end
+    if ~isempty(saccade) && isempty(h.Saccade)
+        h.Saccade = plot([saccade_start_pos(saccade,1) saccade_end_pos(saccade,1)], [saccade_start_pos(saccade,2) saccade_end_pos(saccade,2)], 'b.-');        
+        h.iSac = saccade;    
+    end
+        
+    % Plot stimuli
+    trial = find(time(iTime)>anchor_times(:,1) & time(iTime)<anchor_times(:,2),1);
+    if ~isequal(trial,h.iTrial)
+        delete([h.Cross, h.Squares, h.Circle]);
+        [h.Cross, h.Squares, h.Circle] = deal([]);
+        h.iTrial = [];
+    end
+    if ~isempty(trial)
+        h.iTrial = trial;
+        % Plot cross
+        if time(iTime)<trial_times(trial,2) && isempty(h.Cross)
+            h.Cross = plot(anchor_pos(1,isRightCross(trial)+1), anchor_pos(2,isRightCross(trial)+1),'k+');
+        elseif time(iTime)>trial_times(trial,2) && ~isempty(h.Cross);
+            delete(h.Cross);
+            h.Cross = [];
+        end
+        % Plot squares    
+        if time(iTime)>trial_times(trial,1) && time(iTime)<trial_times(trial,2) && isempty(h.Squares)
+            h.Squares(~isTargetSquare(trial,:)) = scatter(squares_pos(1,~isTargetSquare(trial,:)), squares_pos(2,~isTargetSquare(trial,:)),'bs');
+            h.Squares(isTargetSquare(trial,:)) = scatter(squares_pos(1,isTargetSquare(trial,:)), squares_pos(2,isTargetSquare(trial,:)),'rs');
+        elseif time(iTime)<trial_times(trial,1) || time(iTime)>trial_times(trial,2) && ~isempty(h.Squares)
+            delete(h.Squares); % or just make it invisible?
+            h.Squares = [];
+        end
+        % Plot circle
+        if time(iTime)>trial_times(trial,1) && isempty(h.Circle)
+            h.Circle = plot(anchor_pos(1,~isRightCross(trial)+1), anchor_pos(2,~isRightCross(trial)+1),'ko');
+        elseif time(iTime)<trial_times(trial,1) && ~isempty(h.Circle)
+            delete(h.Circle);
+            h.Circle = [];
+        end
+    end
+        
+    
+    % Update title
+    title(sprintf('t = %.3f s\nTrial #%d, Saccade #%d',time(iTime),trial,saccade));
+end
+
+function time_callback(hObject,eventdata) % First mouse click on the Time plot brings us here
+    cp = get(h.Time,'CurrentPoint'); % get the point(s) (x,y) where the person just clicked
+    x = cp(1,1); % choose the x value of one point (the x values should all be the same).
+    iTime = find(time>=x,1); % find closest time to the click
+    redraw; % update line and topoplot
+end    
+
+function play_callback(hObject,eventdata)
+    % Get button value
+    button_is_on = get(hObject,'Value') == get(hObject,'Max');
+    % Keep incrementing and plotting
+    while button_is_on && iTime < numel(time) %until we press pause or reach the end
+        iTime=iTime+floor(get(h.Speed,'Value'));
+        redraw;
+        button_is_on = get(hObject,'Value') == get(hObject,'Max');
+    end
+    set(hObject,'Value',get(hObject,'Min')); % if we've reached the end, turn off the play button
+end %function play_callback
+
+function back_callback(hObject,eventdata)
+    iTime = iTime-1; % decrement time index
+    redraw; % update line and topoplot
+end
+
+function fwd_callback(hObject,eventdata)
+    iTime = iTime+1; % increment time index
+    redraw; % update line and topoplot
+end
+
+function sacback_callback(hObject,eventdata)
+    saccade = find(saccade_times(:,2)<time(iTime),1,'last');
+    iTime = find(time>saccade_times(saccade,1),1);    
+    redraw; % update line and topoplot
+end
+
+function sacfwd_callback(hObject,eventdata)
+    saccade = find(saccade_times(:,1)>time(iTime),1,'first');
+    iTime = find(time>saccade_times(saccade,1),1);    
+    redraw; % update line and topoplot
+end
+
+
+end %function MakeEyeMovie
+
+
+

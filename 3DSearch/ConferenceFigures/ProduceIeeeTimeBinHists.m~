@@ -1,0 +1,44 @@
+% ProduceIeeeTimeBinHists
+%
+% Plots the histograms of times at which target and distractor trials were
+% significantly separated and in how many electrodes, for stimulus-locked 
+% and saccade-locked analysis.
+% This plot was Figure 4 in DJ's 2011 IEEE/EMBS NE conference submission.
+%
+% Created 1/18/11 by DJ 
+% Updated 1/20/11 by DJ - comments.
+
+%% Set up
+subjects = [6 2 7];
+channels = [6 15 25]; % Fz Cz Pz, for 'noduds' datasets
+figure;
+
+% Load data
+LoadAllEpochs; % alter this program to get stimulus-locked or saccade-locked analysis.
+
+%% PLOT CHANNEL ERPS
+channels = 1:EEG.nbchan;
+allSigTimes = [];
+for i = 1:numel(channels)
+    dataTarg = [];
+    dataDis = [];
+    for j=1:numel(subjects)
+        % For a trial-level average...
+        dataTarg = [dataTarg; permute(ALLEEG(2*j-1).data(channels(i),:,:),[3 2 1])];
+        dataDis = [dataDis; permute(ALLEEG(2*j).data(channels(i),:,:),[3 2 1])];
+        
+        % For a grand average...
+    %     dataTarg(j,:) = mean(ALLEEG(2*j-1).data(channel,:,:),3); 
+    %     dataDis(j,:) = mean(ALLEEG(2*j).data(channel,:,:),3);
+    end
+    % Channel ERPs
+    figure; 
+    [~, ~, sigTimes] = PlotChannelErp(dataTarg,dataDis,ALLEEG(1).times,ALLEEG(1).chanlocs(channels(i)).labels);
+    close;
+    allSigTimes = [allSigTimes sigTimes];
+end
+clear channels dataTarg dataDis i j
+
+dt = 100; % time bin in ms
+t = (-500+dt/2):dt:(1000-dt/2);
+PlotTimeBinHistogram(allSigTimes,-450:100:950,EEG.nbchan*)

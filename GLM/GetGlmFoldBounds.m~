@@ -1,0 +1,46 @@
+function foldBounds = GetGlmFoldBounds(EEG,regressor_events,artifact_events,extent_ms,nFolds)
+
+% Separates a squares expt EEG file into N separate structs.
+%
+% INPUTS:
+% -EEG is an eeglab data struct from a squares experiment.
+% -regressor_events, artifact_events, and extent_ms are used in a way that
+% parallels the other GLM programs.
+% - 
+%
+% OUTPUTS:
+%
+%
+% Created 2/1/12 by DJ.
+
+% Find constants
+dt = 1000/EEG.srate;
+Nt = round(extent_ms/dt); % how many samples should each response function extend?
+t = (1:EEG.pnts)*dt; % time vector for EEG
+
+% Find event times
+Nr = numel(regressor_events);
+event_times = cell(1,Nr);
+for i=1:Nr
+    event_times{i} = [EEG.event(strcmp(regressor_events{i},{EEG.event(:).type})).latency]*dt;
+end
+
+% Find blink events
+artifact_times = [EEG.event(ismember({EEG.event(:).type}, artifact_events)).latency]*dt;
+
+disp('Getting regressors...');
+% Get regressors
+[s,S] = GetGlmRegressors(t,event_times,artifact_times,Nt);
+
+% Get info about data
+isRelevantTime = sum(S,2)>0; % Will this sample be used in the final GLM?
+nEventsSoFar = cumsum(sum(s,1)); % How many regressor events have taken place so far?
+nEventsPerFold = sum(s(:)/nFolds); % How many events should be included per fold?
+
+foldBounds = nan(1,nFolds+1);
+foldBounds(1) = 1;
+foldBounds(end) = EEG.pnts;
+for i=1:nFolds-1    
+    foldBounds(i+1) = find(nEventsSoFar>=nEventsPerFold*i & ~isRelevantTime',1);    
+end
+disp('Done!')

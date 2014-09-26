@@ -1,0 +1,90 @@
+function comp = GetHeogComponent(EEG,offset_ms,heogtypes)
+
+% comp = GetHeogComponent(EEG,offset_ms,heogtypes)
+%
+% INPUTS:
+% -EEG is an EEGLAB dataset with events of type 'FSL' and 'FEL' added (to
+% signify the start and end of each left-side fixation) and 'FSR' and 'FER' 
+% (to signify the start and end of each right-side fixation).
+% -offset_ms is a scalar indicating the offset, in ms, from the stated
+% event times when the event actually occurred.
+% -heogtypes is a 2x2 cell array of strings containing the event codes for 
+% left-fixation start and end (first row) and right-fixaiton start and end
+% (w
+%
+% OUTPUTS:
+% -comp is a Dx1 vector indicating the component showing maximum difference
+% between left-side and right-side fixation periods.
+%
+% Created 6/4/13 by DJ.
+% Updated 3/11/14 by DJ - comments.
+
+if nargin<2 || isempty(offset_ms)
+    offset_ms = 0;
+end
+
+% Set options
+doPlot = false;
+
+% Get times of L and R fixations
+eventType = {EEG.event.type};
+eventLatency = [EEG.event.latency];
+iEventsFSL = find(strcmp('FSL',eventType));
+iEventsFEL = find(strcmp('FEL',eventType));
+iEventsFSR = find(strcmp('FSR',eventType));
+iEventsFER = find(strcmp('FER',eventType));
+
+
+% Set up artifact checks
+energy = mean(EEG.data.^2,1); % mean energy across all electrodes
+ENERGY_MAX = 1e4; % If the energy is greater than this, we're in an unusual artifact, not a regular fixation.
+skipped = 0;
+% Find time points in L and R fixations, but not a weird artifact
+isLeft = false(1,EEG.pnts);
+isRight = false(1,EEG.pnts);
+offset_samples = round(offset_ms/1000*EEG.srate);
+for i=1:numel(iEventsFSL)
+    iLeft = max(1, round(eventLatency(iEventsFSL(i))+offset_samples)) : min(EEG.pnts, round(eventLatency(iEventsFEL(i))+offset_samples));
+    if max(energy(iLeft)) < ENERGY_MAX % if it's not a weird artifact
+        isLeft(iLeft) = true;
+    else
+        skipped = skipped + 1;
+    end
+end
+fprintf('Skipped %d/%d L fixations due to artifacts.\n',skipped,numel(iEventsFSL));
+skipped = 0; % reset for R fixations
+for i=1:numel(iEventsFSR)
+    iRight = max(1, round(eventLatency(iEventsFSR(i))+offset_samples)) : min(EEG.pnts, round(eventLatency(iEventsFER(i))+offset_samples));
+    if max(energy(iRight)) < ENERGY_MAX % if it's not a weird artifact
+        isRight(iRight) = true;
+    else
+        skipped = skipped + 1;
+    end
+end
+fprintf('Skipped %d/%d R fixations due to artifacts.\n',skipped,numel(iEventsFSR));
+
+
+% Extract data from these times
+data_left = EEG.data(:,isLeft);
+data_right = EEG.data(:,isRight);
+
+% Find difference component
+comp = difference(data_left, data_right);
+
+% plot component on scalp
+if doPlot
+    cla;
+    topoplot(comp,EEG.chanlocs);
+    colorbar;
+    title(sprintf('HEOG compoent for %s',EEG.setname));
+end
+
+% Function from eyesubtract.m
+function Difvec=difference(EEG_1,EEG_2)
+    
+    % Get difference
+    Difvec = mean(EEG_1,2)-mean(EEG_2,2);
+    % Normalize
+    Difvec = Difvec./norm(Difvec);
+
+return

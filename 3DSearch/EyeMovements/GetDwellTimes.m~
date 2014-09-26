@@ -1,0 +1,79 @@
+function [dwell, isToTarget] = GetDwellTimes(subject,sessions)
+
+% Get the time the eye dwells on each object in a 3DS task.
+%
+% [dwell, isToTarget] = GetDwellTimes(subject,sessions)
+% [dwell, isToTarget] = GetDwellTimes(y)
+%
+% INPUTS:
+% -subject is a scalar indicating the subject number.
+% -sessions is an n-element vector indicating the session numbers for that
+% subject. The program loads files called '3DS-<subject>-<session>.mat'.
+% -y is an n-element vector of 3DS data structs for one subject.
+%
+% OUTPUTS:
+% -dwell is an n-element cell vector, where each cell contains a vector of
+% the time spent looking at each object % (in ms).
+% -isToTarget is an n-element vector indicating whether the corresponding 
+% object was a target or not.
+%
+% Created 5/21/13 by DJ.
+
+% Set defaults
+option_plot = false;
+
+if isstruct(subject)
+    y = subject;
+else
+    y = loadBehaviorData(subject,sessions,'3DS');
+end
+
+if option_plot
+    cla; hold on;
+end
+dwell = cell(1,numel(y));
+isToTarget = cell(1,numel(y));
+for i=1:numel(y)    
+    fprintf('Session %d/%d...\n',i,numel(y));
+%     foo = load(sprintf('3DS-%d-%d-eyepos.mat',subject,sessions(i)));
+%     times = (1:length(foo.eyepos))+y(i).eyelink.record_time-1;
+%     dist = DistToObject(y(i),foo.eyepos,times);
+    times = y(i).eyelink.saccade_times;
+    dist = DistToObject(y(i),y(i).eyelink.saccade_positions,times);
+    isOnObject = dist<100;
+    onTimes = times(diff([0; isOnObject])>0);
+    offTimes = times(diff([0; isOnObject])<0);
+    
+    % Get object lifetimes
+    objectOnTimes = y(i).eyelink.object_events(y(i).eyelink.object_events(:,2)<1000,1);
+    objectOffTimes = y(i).eyelink.object_events(y(i).eyelink.object_events(:,2)>1000,1);    
+    objectNumbers = y(i).eyelink.object_events(y(i).eyelink.object_events(:,2)>1000,2)-1000;
+    objectIsTarget = strcmp('TargetObject',{y(i).objects(objectNumbers).tag});
+    for j=1:length(objectOnTimes)
+        iOnTime = find(onTimes>objectOnTimes(j) & onTimes<objectOffTimes(j),1); % first saccade to this object
+        if ~isempty(iOnTime)
+            dwell{i}(j) = min(objectOffTimes(j),offTimes(iOnTime))-onTimes(iOnTime); % when the obj goes offscreen or the subj saccades away, whichever comes first
+        else
+            dwell{i}(j) = NaN;
+        end
+        isToTarget{i}(j) = objectIsTarget(j);
+    end
+    
+    % Plot things
+    if option_plot        
+        for j=1:length(objectOnTimes)
+            plot([objectOnTimes(j), objectOffTimes(j)]-y(i).eyelink.record_time,[i i],'r-');
+        end      
+
+        for j=1:length(onTimes)
+            plot([onTimes(j) offTimes(j)]-y(i).eyelink.record_time,[i i]+0.1,'-');
+        end
+    end
+    
+    
+end
+% annotate plot
+if option_plot
+    ylim([0 numel(y)+1])
+end
+disp('Done!')

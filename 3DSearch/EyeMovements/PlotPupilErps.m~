@@ -1,0 +1,48 @@
+function [tPup, dPup] = PlotPupilErps(data, baselineWin)
+
+% [tPup, dPup] = PlotPupilErps(data);
+%
+% INPUTS:
+% -data is the data field of the output struct of GetEyeErps.
+% -baselineWin is a 2-element vector indicating the start and end times of
+% the baseline time (typica
+%
+% OUTPUTS:
+%
+%
+% Created 6/20/11 by DJ.
+
+
+% Handle defaults
+if nargin<2
+    baselineWin = [-200 0];
+end
+
+% Extract info
+tPup = data.targetPupEpochs;
+dPup = data.distractorPupEpochs;
+times = data.epochTimes;
+% Find baseline
+isBaseline = times>=baselineWin(1) & times<=baselineWin(2);
+
+% Subtract baseline
+for i=1:size(tPup,1)
+    % subtract baseline    
+    trialBaseline = mean(tPup(i,isBaseline));
+    tPup(i,:) = tPup(i,:) - trialBaseline;
+end
+
+for i=1:size(dPup,1)
+    % subtract baseline    
+    trialBaseline = mean(dPup(i,isBaseline));
+    dPup(i,:) = dPup(i,:) - trialBaseline;
+end
+
+% Plot
+cla; hold on;
+plot(times,nanmean(tPup),'b')
+plot(times,nanmean(tPup)-nanstd(tPup),'b--')
+plot(times,nanmean(tPup)+nanstd(tPup),'b--')
+plot(times,nanmean(dPup),'r')
+plot(times,nanmean(dPup)-nanstd(dPup),'r--')
+plot(times,nanmean(dPup)+nanstd(dPup),'r--')

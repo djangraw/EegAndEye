@@ -1,0 +1,40 @@
+% TEMP_IcaOnGlmInputs_PlotResults
+
+%% Load GLM and ICA results
+subjects = [9:11 13:15 17:19];
+glmType = 'LREvents-SqNum-NewType-v2pt1';
+
+for i=1:numel(subjects)
+    R(i) = load(sprintf('sq-%d-GLMresults-%s',subjects(i),glmType));
+    I(i) = load(sprintf('sq-%d-GlmIca-%s',subjects(i),glmType));
+end
+
+%% Plot ICA components and timecourses for all subjects
+
+for i=1:numel(R)
+    % Change amplitude of weights
+    scaling = repmat(sqrt(sum(I(i).icawinv(:,:).^2))', [1 size(I(i).icaweights,2)]);
+    icaweights = I(i).icaweights .* scaling;
+    icasphere = I(i).icasphere;
+    icawinv = pinv(icaweights*icasphere);
+    
+    
+    figure(100+i); clf;
+    PlotSvdWeightsAndCourses(R(i).responseFns,R(i).tResponse,...
+        icaweights*icasphere,nan(1,size(icaweights,2)),...
+        R(i).EEG.chanlocs,R(i).regressor_events{R(i).iLevel},6,icawinv);
+    MakeFigureTitle(sprintf('Subject %d, ICs from GLM input',subjects(i)));
+end
+
+%% Plot all ICA components from 1 subject
+iSubj = 9;
+nComps = size(I(iSubj).icawinv,2);
+nRows = ceil(sqrt(nComps));
+nCols = ceil(nComps/nRows);
+clf;
+for i=1:nComps
+    subplot(nRows,nCols,i);
+    topoplot(I(iSubj).icawinv(:,i),R(iSubj).EEG.chanlocs);
+    colorbar;
+end
+MakeFigureTitle(sprintf('Subject %d, Top %d ICs from GLM input',subjects(iSubj), nComps));

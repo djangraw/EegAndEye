@@ -1,0 +1,29 @@
+function GetNumberMeaning(number)
+
+% Displays the meaning of an event code
+% Created 10/18/10 by DJ.
+
+GetNumbers;
+
+if number>Numbers.SACCADE_TO && number<Numbers.SACCADE_TO+50
+    fprintf('Saccade to object # %d/n', number-Numbers.SACCADE_TO);
+elseif number>Numbers.ENTERS && number<Numbers.ENTERS+50
+    fprintf('Enter object # %d/n', number-Numbers.ENTERS); 
+elseif number>Numbers.EXITS && number<Numbers.EXITS+50
+    fprintf('Exit object # %d/n', number-Numbers.EXITS); 
+elseif number==Numbers.START_TRIAL+Numbers.STATIONARY
+    fprintf('Start Stationary Trial/n'); 
+elseif number==Numbers.START_TRIAL+Numbers.MOVING
+    fprintf('Start Moving Trial/n'); 
+elseif number==Numbers.START_TRIAL+Numbers.POPUP
+    fprintf('Start Popup Trial/n');     
+else
+    names = fieldnames(Numbers);
+    for i=1:numel(names)
+        if Numbers.names{i}==number
+            fprintf('%s event',names{i})
+            return;
+        end
+    end
+end
+    

@@ -1,0 +1,151 @@
+function ts_saccades = classify_saccades(saccade_times, saccade_positions, object_limits, pixelThresholds, timeLimits)
+
+% Decides on the first saccade to each object and returns an event list.
+%
+% ts_saccades = classify_saccades(saccade_times, saccade_positions, object_limits, pixelThresholds, timeLimits)
+%
+% INPUTS:
+% -saccade_times is an nx1 vector of times at which saccades ended, where
+% n is the number of saccades in the current session.
+% -saccade_positions is an nx2 matrix of the x and y positions of each 
+% saccade's endpoint.
+% -object_limits is an mx7 matrix, where m is the number of frames in which
+% an object was visible.  The first column is an eyelink timestamp, and the
+% second is the number of the object visible at that time.  The next four
+% columns represent the left, top, width and height of the object's visual 
+% limits on-screen at that time. The final column is the fraction of the 
+% object that was visible at that time. (created by get_objectlimits)
+% -pixelThresholds (optional) is a vector of distances (in pixels, from the
+% saccade endpoint to the object) that a saccade must be within to be
+% considered a saccade "to the object". The first saccade inside 
+% pixelThresholds(1) will be used. If that doesn't exist, the first saccade 
+% inside threshold 2 will be used (and so on). [Default: 50 100 150]
+% -timeLimits is a 2-element vector with the start and end times, in ms,
+% that are acceptable for a saccade to be counted.  [Default: 0 Inf]
+%
+% Created 8/19/10 by DJ.
+% Updated 2/23/11 by DJ - made pixelThresholds an optional input, added
+% timeLimits, fixed no-saccade error by making 
+
+% SET UP
+if nargin<4
+    pixelThresholds = [50 100 150]; % default
+end
+if nargin<5
+    timeLimits = [0 Inf];
+end
+GetNumbers;
+object_events = get_objecttimes(object_limits);
+object_numbers = unique(object_limits(:,2));
+ts_saccades = zeros(0,2);
+% The first saccade inside threshold 1 will be used.  
+% If that doesn't exist, the first saccade inside threshold 2 will be used.
+% etc. etc.
+
+% Find the first saccade to an object, every time it appears.
+for i=1:numel(object_numbers);
+    obj = object_numbers(i);
+    % Find the times when this object is onscreen
+    appeartimes = object_events(object_events(:,2)==(Numbers.ENTERS+obj),1);
+    disappeartimes = object_events(object_events(:,2)==(Numbers.EXITS+obj),1);
+    % Make sure the vectors are the same length (we use appear/disappear pairs below)
+    if numel(appeartimes)<numel(disappeartimes)
+        appeartimes = [appeartimes; zeros(numel(disappeartimes)-numel(appeartimes),1)];
+    elseif numel(disappeartimes)<numel(appeartimes)
+        disappeartimes = [disappeartimes; Inf(numel(appeartimes)-numel(disappeartimes),1)];
+    end
+    
+    % Find the first saccade to the object during each appearance
+    for j=1:numel(appeartimes)
+        % Find saccades in acceptable time range
+        if (appeartimes(j)+timeLimits(2)) < disappeartimes(j) % if specified time range is smaller than appearance duration
+            sac_subset = find(saccade_times > (appeartimes(j)+timeLimits(1)) & saccade_times < (appeartimes(j)+timeLimits(2)) ); % within specified time range
+        else
+            sac_subset = find(saccade_times > (appeartimes(j)+timeLimits(1)) & saccade_times < disappeartimes(j)); % within time of object visibility
+        end
+        % Find the distance from each applicable saccade to the object's
+        % bounding box
+        dist = Inf(numel(sac_subset),1); % the distance to the bounding box (preallocate for speed)
+        for k=1:numel(sac_subset)
+            % Get the time when this object was last seen
+            t = saccade_times(sac_subset(k));
+            iLastLimit = find(object_limits(:,2)==obj & object_limits(:,1)<t,1,'last');
+            % Get object limits
+            left = object_limits(iLastLimit,3);
+            top = object_limits(iLastLimit,4);
+            width = object_limits(iLastLimit,5);
+            height = object_limits(iLastLimit,6);
+            % Get saccade position
+            x = saccade_positions(sac_subset(k),1);
+            y = saccade_positions(sac_subset(k),2);
+            % Get shortest distance from saccade position to object box
+            if x<left
+                dx = left-x;
+            elseif x>left+width
+                dx = x-(left+width);
+            else 
+                dx = 0;
+            end
+            if y<top
+                dy = top-y;
+            elseif y>top+height
+                dy = y-(top+height);
+            else
+                dy = 0;
+            end
+            dist(k) = sqrt(dx*dx + dy*dy);
+        end
+        
+        % Apply rules to find first saccade to the object during this appearance
+        for l=1:numel(pixelThresholds)
+            k_firstsac = find(dist<pixelThresholds(l),1);            
+            if ~isempty(k_firstsac) 
+                break;
+            end
+        end
+        if ~isempty(k_firstsac)
+%             disp(sprintf('distance = %g', dist(k_firstsac)));
+            t_firstsac = saccade_times(sac_subset(k_firstsac));
+            ts_saccades = [ts_saccades; t_firstsac, obj];
+%         else
+%             disp(sprintf('closest = %g', min(dist)));
+        end
+    end
+end
+
+% Sort into chronological order
+[~, order] = sort(ts_saccades(:,1));
+ts_saccades = ts_saccades(order,:);
+
+
+% %% old way
+% for i=1:n
+%     t = saccade_times(i);
+%     saccaded_to = [];
+%     % for each object, check if we saccaded to it.
+%     for j=1:numel(object_numbers)
+%         obj = object_numbers(j);
+%         iLastLimit = find(object_limits(:,2)==obj & object_limits(:,1)<t,1,'last');
+%         if ~isempty(iLastLimit)
+%             lastseen = object_limits(iLastLimit,1);
+%             lag = t - lastseen;
+%             if lag<=Numbers.MAX_LAG_BETWEEN_FRAMES % if it's <20ms between the last time the object was seen and this saccade, consider it visible.
+%                 left = object_limits(iLastLimit,3);
+%                 top = object_limits(iLastLimit,4);
+%                 width = object_limits(iLastLimit,5);
+%                 height = object_limits(iLastLimit,6);
+%                 x = saccade_positions(i,1);
+%                 y = saccade_positions(i,2);
+%                 if x>left-pixAround && x<(left+width+pixAround) && y>top-pixAround && y<(top+height+pixAround)
+%                     saccaded_to = [saccaded_to obj];
+%                 end
+%             end
+%         end
+%     end
+%     % Add to ts_saccades matrix
+%     if ~isempty(saccaded_to) % if at least one object was saccaded to, add one event 
+%         ts_saccades = [ts_saccades; repmat(t,numel(saccaded_to),1) Numbers.SACCADE_TO+saccaded_to];
+%     else
+%         ts_saccades = [ts_saccades; t Numbers.SACCADE_TO + Numbers.WALL];
+%     end
+% end

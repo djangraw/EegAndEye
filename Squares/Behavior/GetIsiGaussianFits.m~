@@ -1,0 +1,50 @@
+function obj = GetIsiGaussianFits(results,class)
+
+% Created 2/5/13 by DJ.
+
+% Declare histogram bins
+xIsi = 2.5:5:1000;%10:20:1000;
+
+
+
+% Get event indices
+[~,~,~,iEvents] = UseEventRule(results,class);
+% Get event info
+nSessions = numel(results);
+[dist,dur,squaredurA,fixdurA] = deal(cell(1,nSessions));
+for k=1:nSessions
+    s = results(k).saccade;
+    dist{k} = sqrt((s.end_position(iEvents{k},1)-s.start_position(iEvents{k},1)).^2 + ...
+        (s.end_position(iEvents{k},2)-s.start_position(iEvents{k},2)).^2);
+
+    fixdur = s.start_time(2:end) - s.end_time(1:end-1);
+    fixdurA{k} = fixdur(iEvents{k}); % duration of fixation after this saccade
+end
+distance = cat(1,dist{:});
+fixdur_after = cat(1,fixdurA{:});
+
+%%
+% Fit distance distribution to mixture of gaussians (MoG)
+X = fixdur_after(fixdur_after<1000); %cut off at 1s
+X = fixdur_after(fixdur_after<1000 & distance<100); %cut off at 1s
+nGaussians = 2;
+obj = gmdistribution.fit(X,nGaussians,'sharedcov',false,'replicates',10);
+
+% Get gaussian distributions
+amp = obj.PComponents;
+mu = [obj.mu(:)];
+sigma = sqrt([obj.Sigma(:)]);
+%% Plot results
+cla; hold on;
+nIsi = hist(X,xIsi);
+bar(xIsi,nIsi);
+for i=1:nGaussians
+    foo1 = amp(1)*normpdf(xIsi,mu(1),sigma(1));
+    foo2 = amp(2)*normpdf(xIsi,mu(2),sigma(2));
+    normfactor = sum(nIsi)/sum([foo1 foo2]);
+    plot(xIsi,foo1*normfactor,'r');
+    plot(xIsi,foo2*normfactor,'g');    
+end
+plot(xIsi,(foo1+foo2)*normfactor,'c');
+foo = obj.pdf(xIsi');
+plot(xIsi,foo/sum(foo)*sum(nIsi),'m--');

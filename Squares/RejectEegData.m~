@@ -1,0 +1,55 @@
+function [EEG, isBadTrial] = RejectEegData(EEG,y,rejectionrule)
+
+% EEG = RejectEegData(EEG,y,rejectionrule)
+%
+% INPUTS:
+% -EEG is an eeglab dataset imported with import_squares_data.m.
+% -y is a squares dataset imported with import_squares_data.m.
+% -rejectionrule is a cell array of strings indicating which type of trials
+% you want to mark for rejection (see RejectBehavior for details).
+%
+% OUTPUTS:
+% -EEG is the input dataset with offending trials deleted.
+% -isBadTrial is a cell array of binary vectors. isBadTrial{i}(j) indicates 
+% whether trial j in session i was flagged for rejection.
+%
+% Created 5/9/12 by DJ.
+% Updated 8/2/12 by DJ - RejectBehavior now takes cell input
+% Updated 8/8/12 by DJ - Work with epoched dataset, use EEG.etc.rejectepoch
+
+
+% startTimes = cell(1,numel(y));
+% endTimes = cell(1,numel(y));
+isBadTrial = cell(1,numel(y));
+for i=1:numel(y) % session
+    isBadTrial{i} = RejectBehavior(y(i),rejectionrule);
+%     for j=1:numel(rejectionrule) % rule
+%         isRuleBreaker = RejectBehavior(y(i),rejectionrule{j}); % breaks this rule
+%         isBadTrial{i} = isBadTrial{i} | isRuleBreaker; % breaks any rule
+%     end
+%     startTimes{i} = y(i).trial.fix_time(isBadTrial{i});
+%     endTimes{i} = y(i).trial.circle_time(isBadTrial{i});        
+end
+
+isBadTrial = cat(1,isBadTrial{:});
+fprintf('   Rejecting %d/%d = %0.1f%% of trials from EEG data...\n',...
+    sum(isBadTrial), numel(isBadTrial), mean(isBadTrial)*100 );
+EEG.etc.rejectepoch
+
+% fprintf('   Rejecting %d/%d = %0.1f%% of trials from EEG data...\n',...
+%     sum(cat(1,isBadTrial{:})), numel(cat(1,isBadTrial{:})), ...
+%     mean(cat(1,isBadTrial{:}))*100 )
+% [~,rejstart] = AddEeglabEvents_MultiSession( EEG, y, startTimes);
+% [~,rejend] = AddEeglabEvents_MultiSession( EEG, y, endTimes);
+
+% nBadEpochs = numel(rejstart);
+% for i=1:nBadEpochs
+%     fprintf('.')
+%     badEvents = find([EEG.event.latency]/EEG.srate>rejstart(i) & [EEG.event.latency]/EEG.srate<rejend(i));
+%     for j=1:numel(badEvents)
+%         EEG.event(badEvents(j)).type = strcat(EEG.event(badEvents(j)).type,'-REJECTED');
+%     end
+% end    
+    
+% EEG = eeg_eegrej(EEG,[rejstart, rejend]*EEG.srate);
+disp('   Success!')

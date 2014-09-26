@@ -1,0 +1,134 @@
+function [stats,BestTour,plotInfo] = FindBestRoute(subject,sessions,levelname,usegridconstraints)
+
+% Calculates targets seen and distances traveled.
+%
+% [stats,BestTour,plotInfo] = FindBestRoute(subject,sessions,levelname,usegridconstraints)%
+%
+% INPUTS:
+% -subject is the subject number and sessions is a vector of sessions
+% numbers of 3DSearch data files as imported with Import_3DS_Data_v3.
+% -levelname is a string that indicates an image filename in the current
+% path.
+% -usegridconstraints is a boolean indicating whether you want the
+% traveling salesman algorithm to snap all the object and routes to the
+% grid (otherwise it can travel diagonally). [default: false]
+%
+% OUTPUT:
+% -stats is a struct with some information from the analysis.
+% -BestTour is an Nx2 matrix, where N is the number of stops on the
+% traveling salesman route suggested by this program.
+% -plotInfo is a struct with info that can be used to plot the results.
+%
+% Created 8/7/13 by DJ based on CalculateImprovement.
+% Updated 12/31/13 by DJ - added bestTourDist and allTourDist stats fields
+
+if nargin<4 || isempty(usegridconstraints)
+    usegridconstraints = false;
+end
+
+% Set up
+% load camera path
+levelinfo = load([levelname(1:end-4) '.mat']); % load variables campoints and sessionOffset
+
+if strcmp(levelname(1:end-4),'GridHuge')
+    nPointsPerSession = 23;
+    nObjSeenPerSession = 20;
+else
+    nPointsPerSession = 21;
+end
+
+% load object info
+[objects, objnames, objlocs, objtimes] = GetObjectList(subject,sessions);
+
+% main loop
+camdist = 0;
+cameraPath = cell(1,numel(sessions));
+for i=1:numel(sessions)
+    % initialize
+    load(sprintf('3DS-%d-%d',subject,sessions(i)));
+    nObjPerSession = length(x.objects);
+   
+    % get spatial offset for this session
+    thisSessionOffset = levelinfo.sessionOffset * (i-1); % this offset specific to level SnakeHuge
+   
+    % shift objects
+    iThisSession = (i-1)*nObjPerSession + (1:nObjPerSession); % indices in obj___ for this session's objects
+    objlocs(iThisSession,:) = objlocs(iThisSession,:) + repmat(thisSessionOffset,nObjPerSession,1);    
+
+end
+
+% Snap object locations to grid
+if usegridconstraints
+    objlocs(:,1) = round(objlocs(:,1)/15)*15;
+    objlocs(:,2) = round(objlocs(:,2)/20)*20;
+end
+
+
+% categorize points according to true label
+targets = strcmp('TargetObject',{objects(:).tag});
+distractors = strcmp('DistractorObject',{objects(:).tag});
+
+
+%%
+wasViewed = ones(size(targets));
+% Get binary bits (useful below)
+isEegTarget = zeros(size(targets));
+isEegTarget(targets) = 1;
+isTagTarget = zeros(size(targets));
+isTagTarget(targets) = 1;
+
+% Get traveling salesman route
+TargetLocations = objlocs(targets,:);
+[BestTour,~,BestTourDist] = solveTSP(TargetLocations,0,usegridconstraints);
+[AllTour,~,AllTourDist] = solveTSP(objlocs,0,usegridconstraints);
+
+% Display results
+fprintf('--------------------\n')
+fprintf('Percent correct -- EEG: %0.1f, TAG: %0.1f\n',...
+    sum(isEegTarget & targets)/sum(isEegTarget)*100,...
+    sum(isTagTarget & targets)/sum(isTagTarget)*100);
+fprintf('Percent of targets found -- EEG: %0.1f, TAG: %0.1f\n',...
+    sum(isEegTarget & targets)/sum(targets)*100,...
+    sum(isTagTarget & targets)/sum(targets)*100);
+fprintf('%% of TAG pts that are true targets: %0.1f\n', ...
+    sum(isTagTarget & targets)/sum(isTagTarget)*100);
+fprintf('%% of true targets that are TAG pts: %0.1f\n', ...
+    sum(isTagTarget & targets)/sum(targets)*100);
+fprintf('--------------------\n')
+fprintf('Total objects in scene: %d\n', ...
+    numel(objects));
+fprintf('Targets seen during training: %d/%d\n', ...
+    sum(targets & wasViewed), sum(wasViewed));
+fprintf('Targets seen during Tag traveling salesman: %d/%d\n', ...
+    sum(targets & isTagTarget), sum(isTagTarget));
+fprintf('New targets seen during Tag traveling salesman: %d\n', ...
+    sum(targets & isTagTarget & ~wasViewed));
+fprintf('--------------------\n')
+fprintf('Distance traveled during training: %0.1fm\n',camdist);
+fprintf('All objects traveling salesman distance: %0.1fm\n', AllTourDist);
+fprintf('Tag traveling salesman distance: %0.1fm\n', BestTourDist);   
+fprintf('Savings: travel %0.1f%% of the distance to see %0.1f%% of the targets.\n',...
+    BestTourDist/AllTourDist*100, sum(isTagTarget & targets)/sum(targets)*100);
+fprintf('--------------------\n')    
+
+stats.precision(1) = sum(isEegTarget & targets)/sum(isEegTarget)*100;
+% stats.precision(2) = sum(isSelfTunedTarget & targets)/sum(isSelfTunedTarget)*100;
+stats.precision(2) = sum(isTagTarget & targets)/sum(isTagTarget)*100;
+stats.pctFound(1) = sum(isEegTarget & targets)/sum(targets)*100;
+% stats.pctFound(2) = sum(isSelfTunedTarget & targets)/sum(targets)*100;
+stats.pctFound(2) = sum(isTagTarget & targets)/sum(targets)*100;
+stats.pctDistance = BestTourDist/AllTourDist*100;
+stats.bestTourDist = BestTourDist;
+stats.allTourDist = AllTourDist;
+
+% Make plotInfo struct for plotting
+plotInfo.objlocs = objlocs;
+plotInfo.iTargets = targets;
+plotInfo.iEegTargets = targets;
+plotInfo.iSelfTunedTargets = targets;
+plotInfo.iTagTargets = targets;
+% tagScore(newRanking) = length(newRanking):-1:1; % first-ranked obj has highest score
+% plotInfo.tagScore = tagScore;
+plotInfo.tagScore = nan(size(targets));
+plotInfo.tagRank = nan(size(targets));
+plotInfo.cameraPath = AllTour;

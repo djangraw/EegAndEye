@@ -1,0 +1,34 @@
+function iObjects_eeg_pt = GetEegPredictedTargets(subject,sessions,ALLEEG,y,truth)
+
+% Created 5/23/13 by DJ.
+
+% load results and params, then...
+nTargets = sum(truth);
+nDistractors = numel(truth)-nTargets;
+trialNumbers(truth==1) = [1:nDistractors, 1:nTargets]; % the trial number (in EEG struct) for each element of p and truth
+
+% sort trials
+[~, order] = sort(y,1,'descend'); % sort trials in order of descending probability of being a target
+truth_ordered = truth(order); % sort the truth values the same way
+fprintf('Using 1 std threshold... ')
+n_eeg_pt = sum(y>mean(y)+1*std(y));
+fprintf('%d objects passed threshold.\n',n_eeg_pt);
+% end
+if n_eeg_pt<5
+    error('fewer than 5 trials passed 1 std threshold!')    
+end
+order_eeg_pt = order(1:n_eeg_pt); % crop trial numbers
+truth_eeg_pt = truth_ordered(1:n_eeg_pt); % crop truth values
+
+% get eeg struct trial numbers of eeg predicted targets ("eeg_pt")
+iTargTrials_eeg_pt = trialNumbers(order_eeg_pt(truth_eeg_pt==1)); % get trial numbers in target EEG struct
+iDistTrials_eeg_pt = trialNumbers(order_eeg_pt(truth_eeg_pt~=1)); % get trial numbers in distractor EEG struct
+
+% get a list of the object numbers for the eeg trials
+% subject = 2; sessions = 41:48;
+[objects, objnames, objlocs, objtimes, objisessions] = GetObjectList(subject,sessions); % get a list of every object seen and its properties
+iObjects_targets = EpochToObjectNumber(ALLEEG(1),objtimes, objisessions); % Find the objects that were seen in the target EEG struct's trials
+iObjects_distractors = EpochToObjectNumber(ALLEEG(2),objtimes, objisessions); % Find the objects that were seen in the distractor EEG struct's trials
+
+% rerank with TAG
+iObjects_eeg_pt = [iObjects_targets(iTargTrials_eeg_pt) iObjects_distractors(iDistTrials_eeg_pt)]; % get object numbers of EEG predicted targets

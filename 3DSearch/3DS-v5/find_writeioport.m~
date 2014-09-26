@@ -1,0 +1,46 @@
+function [ts_events starttime] = find_writeioport(text_file)
+
+% [ts_events starttime] = find_writeioport(text_file);
+%
+% - This function takes an eyelink text file and extracts the times when
+% events were sent via parallel port to the EEG.  This can be compared
+% against the times when the EEG received these events.
+% - The input should be the file
+% - To create the eyelink text file, we must open the .edf file created
+% during a 3D Search (3DS) experiment and select "Generate Report -->
+% recording event sequence data" from the menu.  
+% - The first line must read
+% START 1234567 (where 1234567 is the Eyelink timestamp for the start of
+% recording).
+
+
+% Setup
+fid = fopen(text_file);
+fseek(fid,0,'eof'); % find end of file
+eof = ftell(fid);
+fseek(fid,0,'bof'); % rewind to beginning
+
+word = 'write_ioport';
+ts_event = []; %each row is timestamp, event
+i = 0;          % number of elements currently in word_vec
+
+% First row should have start timestamp
+str = fgetl(fid);
+starttime = sscanf(str,'START %d');
+if isempty(starttime)
+    error('START timestamp is not the first line in the data file!');
+
+% Main Loop
+while ftell(fid) < eof % if we haven't found it
+    str = fgetl(fid);
+    if findstr(str,word);
+        i = i+1;
+        ts_event(i,:) = sscanf(str,'MSG %d !CMD 0 write_ioport 0x378 %d');
+    end
+end
+
+% Did we find the word anywhere?
+if numel(ts_event) == 0
+    warning(sprintf('Couldn''t find ''%s'' anywhere in document ''%s''!'...
+        ,word,text_file))
+end

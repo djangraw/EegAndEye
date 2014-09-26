@@ -1,0 +1,62 @@
+% ProduceIeeeBootstrapplot
+%
+% Plots the LOO Az values for the 'standard' LR algorithm, and highlights
+% the values that are above those of bootstrapping data.  Note that
+% BootstrapLogReg must be used before this to produce the bootstrapping
+% data, and MakeLogRegMovie (or a variant) must be used before this to
+% produce the real LR data.
+% This plot was Figure 6 in DJ's 2011 IEEE/EMBS NE conference submission.
+%
+% Created 1/14/11 by DJ.
+% Updated 1/18/11 by DJ - comments.
+% Updated 3/30/11 by DJ - added doBoots option, datestring, more colors
+
+% Set up
+% subjects = [6 2 7];
+subjects = [8 10 11 12];
+colors = {[0,.75,.75],[.48,.06,.89],[.85,.16,0],[.75 .75 0]}; % RGB of line colors
+cla; hold on;
+doBoots = 0;
+% datestring = '12-Dec-2010';
+datestring = '30-Mar-2011';
+
+% Get bootstrap info and compare to real LR results
+for i=1:numel(subjects)
+    % Get results
+    realLR(i) = LoadLooResults('filename','LOO.mat','setname1',sprintf('3DS-%d-all',subjects(i)),'datetime',datestring); % Az value from actual analysis
+    % Plot line
+    plot(realLR (i).time*1000,realLR (i).Az,'Color',colors{i});    
+    
+    if doBoots
+        boots = LoadLooResults('filename','LOO_bootstrap.mat','setname1',sprintf('3DS-%d-all',subjects(i))); % bootstrap data
+    
+        % Put bootstrap Az values in matrix and sort them
+        AzAll = [];
+        for j=1:numel(boots)
+            AzAll = [AzAll; boots(j).Az];
+        end
+        AzSorted = sort(AzAll,1);
+
+        % P=0.01: is Az value greater than greatest bootstrap value?
+        isTops{i} = (realLR (i).Az>AzSorted(end,:));
+    end
+            
+end
+
+legend('S1','S2','S3','Location','SouthEast');
+
+% Plot significance things later, so they don't mess with the legend
+for i=1:numel(subjects)
+    plot(realLR (i).time(isTops{i})*1000,realLR (i).Az(isTops{i}),'.','Color',colors{i},'MarkerSize',15);
+end
+
+% format plot
+plot(get(gca,'XLim'),[0.5 0.5],'k--');
+ylim([0.3 0.8]);
+xlim([-200 1000])
+plot([0 0],get(gca,'YLim'),'k-');
+set(gca,'YTick',.3:.1:.8);
+% title('Leave-one-out analysis');
+xlabel('center of time bin (ms)');
+ylabel('Area under ROC curve');
+box on;

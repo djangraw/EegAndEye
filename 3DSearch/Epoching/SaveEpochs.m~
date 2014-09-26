@@ -1,0 +1,24 @@
+% SaveEpochs.m
+%
+% Variable 'subject' must be defined.
+%
+% Created 12/21/10 by DJ.
+
+%% EPOCH
+
+EpochEeglabFile;
+
+%% CLEAN
+for j=2:5 % the sets that will be saved later
+    [ALLEEG EEG CURRENTSET] = pop_newset(ALLEEG, EEG, CURRENTSET,'retrieve',j,'study',0); 
+    RemoveEyeBlinkTrials;
+%         PlotExclusionHistogram(EEG.data,EEG.times,[0 1000]);
+%         ExcludeTrialsByCutoff;
+end
+
+%% SAVE
+% Save results
+% pop_saveset(ALLEEG(2), 'filename',sprintf('%d-TargetSac2.set',subject));
+% pop_saveset(ALLEEG(3), 'filename',sprintf('%d-DistractorSac2.set',subject));
+% pop_saveset(ALLEEG(4), 'filename',sprintf('%d-TargetApp.set',subject));
+% pop_saveset(ALLEEG(5), 'filename',sprintf('%d-DistractorApp.set',subject));

@@ -1,0 +1,62 @@
+function Numbers = NEDE_GetNumbers
+
+% Get the constants specific to the 3DSearch task. 
+%
+% Numbers = NEDE_GetNumbers
+% GetNumbers; (this is equivalent to Numbers = NEDE_GetNumbers;)
+%
+% INPUTS:
+%
+% OUTPUTS:
+% -Numbers is the struct of constants.
+%
+% Should be similar to the constants section of Numbers.js from the 
+% current experiment (adjusting variable declarations for MATLAB).
+%
+% Function GetNumberMeaning.m can be used to display the meaning of an
+% event code you encounter.  When you update this function, you should
+% consider updating that one too.
+%
+% Created 6/10 by DJ
+% Updated 7/29/10 by DJ (added Target/Distractor codes)
+% Updated 8/19/10 by DJ (added threshold values)
+% Updated 10/18/10 by DJ (added BLINK).
+% Updated 2/24/11 by DJ (added SEES, SIM_BUTTON).
+% Updated 4/18/11 by DJ (multiplied all anchoring constants by 10 to
+% accommodate new levels with >50 objects).
+% Updated 6/2/11 by DJ - added _START and _END codes for saccades,
+%   fixations, and smooth pursuit
+% Updated 8/4/11 by DJ - added optional input 'when' (for old files)
+
+% Handle inputs
+if nargin<1
+    when = now;
+end
+if ischar(when)
+    when = datenum(when);
+end
+
+%CONSTANTS FOR PARALLEL PORT MESSAGES (MUST BE 0-255).
+Numbers.START_RECORDING = 200;
+Numbers.END_RECORDING = 201;
+%SurpriseLevel values:
+Numbers.STATIONARY = 0;
+Numbers.FOLLOW
+Numbers.SYNC = 211;
+
+% Button values:
+Numbers.GAMEPAD_A = 3;
+Numbers.GAMEPAD_B = 4;
+Numbers.GAMEPAD_TARGET_BUTTON = Numbers.GAMEPAD_A; % number of the target (A) button on the gamepad (?)
+Numbers.GAMEPAD_BRAKE_BUTTON = Numbers.GAMEPAD_B; % number of the brake (B) button on the gamepad
+
+% ANALYSIS CONSTANTS
+Numbers.MAX_LAG_BETWEEN_FRAMES = 100; % max time (ms) something can be offscreen before it's considered a real disappearance
+
+    
+% Send results to program that called this one
+if nargout==0
+%     ST = dbstack;
+%     disp([ST(2).name ' called GetNumbers without specifying an output... you may want to correct this.']);
+    assignin('caller','Numbers',Numbers);
+end

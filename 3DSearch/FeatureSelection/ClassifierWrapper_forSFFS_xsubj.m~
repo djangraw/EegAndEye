@@ -1,0 +1,19 @@
+function AUC = ClassifierWrapper_forSFFS_xsubj(alldata,foo,EEGDATA,YDATA,offsets)
+
+% Created 8/27/13 by DJ.
+
+useEEG = 0;
+cvmode = '10fold';
+nSubjects = numel(EEGDATA);
+
+subjAUC = zeros(1,nSubjects);
+for i=1:nSubjects
+    % set up
+    truth = truth{i}
+    bigFeature = cat(2,alldata{:,iSubj});
+    % classify
+    s = ClassifyWithOcularFeatures(truth,bigFeature);
+    subjAUC(i) = R.Az;
+end
+
+AUC = mean(subjAUC);

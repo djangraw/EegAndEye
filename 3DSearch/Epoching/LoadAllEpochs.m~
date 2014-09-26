@@ -1,0 +1,14 @@
+% LoadAllEpochs.m
+%
+% Variable 'subjects' must be defined.
+%
+% Created 12/21/10 by DJ.
+
+
+% Comment out the next three lines if you want just one subject.
+STUDY = []; CURRENTSTUDY = 0; ALLEEG = []; EEG=[]; CURRENTSET=[];
+for i = 1:numel(subjects)
+    subject = subjects(i);
+    LoadEpochs;
+end
+eeglab redraw;

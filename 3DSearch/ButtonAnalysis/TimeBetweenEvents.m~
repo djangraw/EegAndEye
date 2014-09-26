@@ -1,0 +1,80 @@
+function timeBetween = TimeBetweenEvents(EEG, event1, event2, tBins)
+
+% Find the time between given events in each epoch and plot a histogram.
+%
+% timeBetween = TimeBetweenEvents(EEG, event1, event2)
+%
+% There must be no more than one of each event in each epoch.
+%
+% INPUTS:
+% -EEG is a standard EEGLAB data struct from a 3DSearch experiment.
+% -event1 and event2 are scalars indicating which event numbers you want to
+% find the difference between, or strings indicating those events' fields
+% in the Numbers struct.
+% -tBins is the second input to hist (see help hist for details).
+%
+% OUTPUTS:
+% -timeBetween is an n-element vector, where n=EEG.trials. timeBetween(i)
+% is the time between the specified pair of events in epoch i.
+% 
+% Created 8/5/11 by DJ.
+
+% Handle defaults
+if nargin<4
+    tBins = 10; % 10 bins, equally spaced
+end
+
+% convert from character input
+if ischar(event1)
+    GetNumbers;
+    event1 = Numbers.(event1);
+end
+if ischar(event2)
+    GetNumbers;
+    event1 = Numbers.(event2);
+end
+
+% Display header
+fprintf('---Getting time between events %d and %d...\n',event1,event2);
+
+% extract event info
+eventTypes = [str2double({EEG.event(:).type})];
+eventLatencies = [EEG.event(:).latency] * 1000/EEG.srate;
+eventEpochs = [EEG.event(:).epoch];
+
+% get epoch-by-epoch timing info
+nEpochs = EEG.trials;
+timeBetween = nan(1,nEpochs);
+for i=1:nEpochs
+    event1Latency = eventLatencies(eventEpochs==i & eventTypes==event1);
+    event2Latency = eventLatencies(eventEpochs==i & eventTypes==event2);
+    if length(event1Latency)==1 && length(event2Latency)>1 % if there's more than one event2 in the epoch, get the first event2 AFTER event1.
+        closestPositive = find(event2Latency>event1Latency,1);
+        timeBetween(i) = event2Latency(closestPositive)-event1Latency;
+    if length(event2Latency)==1 && length(event1Latency)>1 % if there's more than one event1 in the epoch, get the last event1 BEFORE event2.
+        closestPositive = find(event1Latency<event2Latency,1,'last');
+        timeBetween(i) = event2Latency(closestPositive)-event1Latency;
+    elseif ~isempty(event1Latency) && ~isempty(event2Latency)
+        timeBetween(i) = event2Latency - event1Latency;
+    end
+end
+
+% display results
+fprintf('%d/%d epochs had both events in them\n',sum(~isnan(timeBetween)),nEpochs);
+fprintf('mean %.1f, median %.1f, std %.1f\n',nanmean(timeBetween),nanmedian(timeBetween),nanstd(timeBetween));
+
+% Plot results in current figure.
+% histogram
+subplot(1,2,1)
+[n, xout] = hist(timeBetween,tBins);
+bar(xout,n);
+xlim([min(xout)-(xout(2)-xout(1))/2,max(xout) + (xout(2)-xout(1))/2])
+xlabel(sprintf('time between event %d and event %d (ms)',event1,event2));
+ylabel('number of epochs');
+title(sprintf('Event delay histogram, %s',EEG.setname));
+% scatter plot
+subplot(1,2,2)
+scatter(1:nEpochs,timeBetween,'b.');
+xlabel('epoch number');
+ylabel(sprintf('time between event %d and event %d (ms)',event1,event2));
+title('Event delay scatter plot');

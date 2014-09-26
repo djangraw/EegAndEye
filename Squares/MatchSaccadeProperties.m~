@@ -1,0 +1,110 @@
+function [iTargetMatches, iDistractorMatches] = MatchSaccadeProperties(x,iTargetSaccades,iDistractorSaccades)
+
+% Takes a squares dataset and a set of target saccades and finds a set of
+% distractor saccades with matching properties.
+%
+% Properties:
+% - squarenum
+% - (target squares so far) - n
+% - (following fixation duration) - not implemented yet
+%
+% Created 11/15/11 by DJ.
+
+% Set up
+if nargin<3
+    Constants = GetSquaresConstants;
+    iDistractorSaccades = find(x.saccade.class==Constants.DISTRACTOR);
+end
+t = 50:100:1500; % fixation duration range
+
+figure;
+nT = MakeHistograms(x,iTargetSaccades,1,t,'Targets');
+nD = MakeHistograms(x,iDistractorSaccades,4,t,'Distractors');
+
+
+% Find distractor trials that match squarenum distribution of targets
+ratio = nD./nT;
+if min(ratio)>1
+    % Pick multiple distractors per target
+    nDisPerTar = floor(min(nD./nT)); % for every target trial in a bin, get nToGet distractor trials.
+    fprintf('Randomly Selecting %d matching distractor trials for every target\n',nDisPerTar)
+    nDis = nDisPerTar*nT;
+    for i=1:numel(nDis)
+        pool = intersect(find(x.saccade.squarenum==i),iDistractorSaccades); % find pool of matching distractor trials
+        orderedpool = pool(randperm(numel(pool))); % randomly re-order pool
+        picks{i} = orderedpool(1:nDis(i))'; % pick top nDis(i) samples from pool
+    end
+    iTargetMatches = iTargetSaccades;
+    iDistractorMatches = [picks{:}];   
+
+elseif max(ratio)<1
+    % Pick multiple targets per distractor
+    nTarPerDis = floor(min(nT./nD)); % for every target trial in a bin, get nToGet distractor trials.
+    fprintf('Randomly Selecting %d matching target trials for every distractor\n',nTarPerDis)
+    nTar = nTarPerDis*nD;
+    for i=1:numel(nTar)
+        pool = intersect(find(x.saccade.squarenum==i),iTargetSaccades); % find pool of matching distractor trials
+        orderedpool = pool(randperm(numel(pool))); % randomly re-order pool
+        picks{i} = orderedpool(1:nTar(i))'; % pick top nDis(i) samples from pool
+    end
+    iTargetMatches = [picks{:}];
+    iDistractorMatches = iDistractorSaccades;
+    
+else
+    % In each bin, eliminate the extras from whichever group has more
+    fprintf('Eliminating trials in smaller category that don''t match in each bin\n',nTarPerDis)
+    for i=1:numel(nD)
+        if nD(i)<nT(i)
+            pool = intersect(find(x.saccade.squarenum==i),iTargetSaccades); % find pool of matching distractor trials
+            orderedpool = pool(randperm(numel(pool))); % randomly re-order pool
+            Tpicks{i} = orderedpool(1:nD(i))'; % pick top nD(i) samples from pool            
+            Dpicks{i} = intersect(find(x.saccade.squarenum==i),iDistractorSaccades)';
+        elseif nD(i)>nT(i)
+            pool = intersect(find(x.saccade.squarenum==i),iDistractorSaccades); % find pool of matching distractor trials
+            orderedpool = pool(randperm(numel(pool))); % randomly re-order pool
+            Dpicks{i} = orderedpool(1:nT(i))'; % pick top nD(i) samples from pool
+            Tpicks{i} = intersect(find(x.saccade.squarenum==i),iTargetSaccades)';
+        end
+    end
+    iTargetMatches = [Tpicks{:}];
+    iDistractorMatches = [Dpicks{:}];
+    
+
+end
+
+figure;
+nTM = MakeHistograms(x,iTargetMatches,1,t,'Target Subset');
+nDM = MakeHistograms(x,iDistractorMatches,4,t,'Distractor Subset');
+
+
+
+function nS = MakeHistograms(x,iSaccades,iPlot,t,titlestring)
+
+% Get properties
+squarenum = x.saccade.squarenum(iSaccades);
+targets_sofar = zeros(size(iSaccades));
+for i=1:numel(iSaccades)
+    targets_sofar(i) = x.trial.target_squares_sofar(x.saccade.trialnum(iSaccades(i)), x.saccade.squarenum(iSaccades(i)));
+end
+fixation_dur = x.saccade.start_time(iSaccades+1) - x.saccade.end_time(iSaccades);   
+
+% Make histograms
+subplot(2,3,iPlot)
+nS = hist(squarenum, 1:5);
+bar(1:5,nS);
+xlabel('squarenum')
+ylabel('# saccades')
+title(titlestring)
+subplot(2,3,iPlot+1)
+hist(targets_sofar, 0:4)
+xlabel('targets so far')
+ylabel('# saccades')
+title(titlestring)
+subplot(2,3,iPlot+2)
+hist(fixation_dur,t)
+set(gca,'xtick',0:200:max(t));
+xlabel('fixation duration (ms)')
+ylabel('# saccades')
+title(titlestring)
+
+

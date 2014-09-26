@@ -1,0 +1,24 @@
+% TEMP_MatchFixationDuration_script
+%
+% Created 4/26/13 by DJ.
+% Updated 10/13/13 by DJ - updated MatchFixationDuration inputs
+
+prefix = 'sq';
+subjects = [9:11 13:15 17:19];
+y = cell(1,numel(subjects));
+%% load data
+for i=1:numel(subjects)
+    y{i} = loadBehaviorData(subjects(i),[],prefix);
+end
+%% do matching
+histedges = 0:50:1000;
+trial_rej_rules = [];
+method = [];
+tLong = 500;
+[isKeeper, class, squarefixtime] = deal(cell(1,numel(subjects)));
+for i=7;%1:numel(subjects)
+    fprintf('----- Subject %d -----\n',subjects(i));
+    figure(600+i); clf;
+    [isKeeper{i}, class{i}, squarefixtime{i}] = MatchFixationDurations(y{i},{'Compl','Dist-1T'},tLong,trial_rej_rules,method,histedges);
+    MakeFigureTitle(sprintf('Subject %d',subjects(i)));
+end

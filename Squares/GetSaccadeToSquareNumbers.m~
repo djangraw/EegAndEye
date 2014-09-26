@@ -1,0 +1,29 @@
+function iSaccades = GetSaccadeToSquareNumbers(y)
+
+% iSaccades = GetSaccadeToSquareNumbers(y)
+%
+% INPUTS:
+% -y is an n-element vector of structs, where y(i) is the behavioral data 
+% for session i.
+%
+% OUTPUTS:
+% -iSaccades is an n-element cell vector, where iSaccades{i} is an mxp
+% matrix of saccade indices in y(i).saccade.  If 
+%
+% Created 6/18/12 by DJ to help find matching times for LogOddsRatio events
+
+nSessions = length(y);
+iSaccades = cell(1,nSessions);
+
+for i=1:nSessions
+    [nTrials, nSquares] = size(y(i).trial.is_target_color);
+    iSaccades{i} = nan(nTrials,nSquares);
+    for j=1:nTrials
+        for k=1:nSquares
+            iSac = find(y(i).saccade.trialnum==j & y(i).saccade.squarenum==k,1);
+            if ~isempty(iSac)
+                iSaccades{i}(j,k) = iSac;
+            end
+        end
+    end
+end

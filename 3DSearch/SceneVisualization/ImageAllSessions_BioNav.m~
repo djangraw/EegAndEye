@@ -1,0 +1,168 @@
+function ImageAllSessions_BioNav(subject,sessions,levelname,offset,eegPredictedTargets,params,usegridconstraints)
+
+% Displays an image of the indicated level with the camera position, target
+% and distractor objects superimposed.
+%
+% ImageAllSessions(subject,sessions,levelname,offset)
+%
+% INPUTS:
+% -subject is the subject number and sessions is a vector of sessions
+% numbers of 3DSearch data files as imported with Import_3DS_Data_v3.
+% -levelname is a string that indicates an image filename in the current
+% path.
+% - offset is the x,y position of the origin in the image.  It will be
+% subtracted from the x and y axes when plotting the image. [default: 0 0]
+%
+% Created 4/18/11 by DJ.
+% Updated a few times by DJ...
+% Updated 5/24/11 by DJ - fixed doTagRanks plotting colors.
+% Updated 12/14/12 by DJ - added usegridconstraints input
+% Updated 2/27/13 by DJ - snap objects to grid if usego
+
+% overwrite these with specified params
+if nargin<6 || isempty(params)
+    params = struct('doTerrain',0,'doDots',0,'doPath',0,'doEegPTs',0,'doTagPTs',1,'doTagRanks',1,'doTravSales',1);
+end
+UnpackStruct(params);
+if nargin<7 || isempty(usegridconstraints)
+    usegridconstraints = false;
+end
+    
+
+% handle inputs
+if nargin<4
+    offset = [0 0];
+end
+
+nCategories = 4;
+
+% display level
+clf
+if doTerrain
+    ImageLevel(levelname,offset);
+else
+    axis equal
+%     axis([-236.5, 663.5, -41.5, 1008.5]);
+    box on
+    hold on;
+end
+
+% load camera path
+levelinfo = load([levelname(1:end-4) '.mat']); % load variables campoints and sessionOffset
+
+if strcmp(levelname(1:end-4),'GridHuge')
+    nPointsPerSession = 23;
+else
+    nPointsPerSession = 21;
+end
+
+% load object info
+[objects, objnames, objlocs, objtimes] = GetObjectList(subject,sessions);
+
+% main loop
+for i=1:numel(sessions)
+    % initialize
+    load(sprintf('3DS-%d-%d',subject,sessions(i)));
+    nObjPerSession = length(x.objects);
+   
+    % get spatial offset for this session
+    thisSessionOffset = levelinfo.sessionOffset * (i-1); % this offset specific to level SnakeHuge
+
+    % plot camera path with offset
+    if doPath
+        campath = levelinfo.campoints(x.start_point+2+(1:nPointsPerSession),:); 
+        ImagePoints(campath,thisSessionOffset,'k','k--'); % blue camera path    
+    end
+    
+    % shift objects
+    iThisSession = (i-1)*nObjPerSession + (1:nObjPerSession); % indices in obj___ for this session's objects
+    objlocs(iThisSession,:) = objlocs(iThisSession,:) + repmat(thisSessionOffset,nObjPerSession,1);    
+
+end
+
+% Snap object locations to grid
+if usegridconstraints
+    objlocs(:,1) = round(objlocs(:,1)/15)*15;
+    objlocs(:,2) = round(objlocs(:,2)/20)*20;
+end
+
+% categorize points according to true label
+targets = strcmp('TargetObject',{objects(:).tag});
+distractors = strcmp('DistractorObject',{objects(:).tag});
+
+% further separate points that were seen
+wasViewed = ~isnan(objtimes);
+
+% plot true labeled points
+if doDots
+    ImagePoints(objlocs(targets,:),[0 0],'r','.'); % red targets
+    ImagePoints(objlocs(distractors,:),[0 0],'b','.'); % green distractors
+end
+
+% Show ideal result of EEG classifier
+if nargin<5
+    eegPredictedTargets = find(targets & wasViewed); % default: perfect classification
+end
+if doEegPTs
+    ImagePoints(objlocs(eegPredictedTargets,:),[0 0],'m','o',10); % yellow targets
+end
+
+% Show TAG's leveraging of ideal classifier
+if doTagPTs || doTagRanks || doTravSales
+    newRanking = RerankObjectsWithTag(objnames, eegPredictedTargets);
+    iTagTargets = newRanking(1:end/nCategories);
+end
+if doTagPTs
+    ImagePoints(objlocs(iTagTargets,:),[0 0],'g','o',15); % green targets
+end
+
+if doTagRanks
+    objSize(newRanking) = numel(newRanking):-1:1;
+%     newSize = numel(newRanking):-1:1;
+    scatter(objlocs(targets,1),objlocs(targets,2),objSize(targets),'r','.');
+    scatter(objlocs(distractors,1),objlocs(distractors,2),objSize(distractors),'b','.');
+%     scatter(objlocs(newRanking(ismember(newRanking,targets)),1),objlocs(newRanking(ismember(newRanking,targets)),2),newSize(ismember(newRanking,targets)),'r','.');
+%     scatter(objlocs(newRanking(ismember(newRanking,distractors)),1),objlocs(newRanking(ismember(newRanking,distractors)),2),newSize(ismember(newRanking,distractors)),'b','.');
+%     colorbar('EastOutside','YTick',[1 480],'YTickLabel',{'TAG Low-Probabilty Target','TAG High-Probability Target'})
+end
+
+if doTravSales
+    locations = objlocs(iTagTargets,:);
+    tour = solveTSP(locations,0,usegridconstraints);
+    plot(tour(:,1),tour(:,2),'k--');
+end
+
+% Annotate plot
+set(gca,'xtick',[],'ytick',[]);
+title('');
+% title(sprintf('Subject %d, level %s', subject, levelname(1:end-4)));
+
+% Make legend
+marks = {};
+labels = {};
+if doDots
+    marks = [marks {'r.','b.'}];
+    labels = [labels {'targets','distractors'}];
+end
+if doTagRanks
+    marks = [marks {'r.','b.'}];
+    labels = [labels {'targets (size ~ TAG rank)','distractors (size ~ TAG rank)'}];
+end
+if doPath
+    marks = [marks {'k--'}];
+    labels = [labels {'subject route'}];      
+end
+if doEegPTs
+    marks = [marks {'mo'}];
+    labels = [labels {'EEG predicted targets'}];
+end
+if doTagPTs
+    marks = [marks {'go'}];
+    labels = [labels {'TAG predicted targets'}];
+end
+if doTravSales
+    marks = [marks {'k--'}];
+    labels = [labels {'traveling salesman route'}];
+end
+    
+MakeLegend(marks, labels)

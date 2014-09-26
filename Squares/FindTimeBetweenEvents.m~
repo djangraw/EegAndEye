@@ -1,0 +1,49 @@
+function timebetween = FindTimeBetweenEvents(EEG,first_event,second_event,one_per_epoch)
+
+% Created 1/28/13 by DJ.
+
+% declare defaults
+if nargin<4 || isempty(one_per_epoch)
+    one_per_epoch = false;
+end
+
+% Set up
+eventlabels = {EEG.event.type};
+eventepochs = [EEG.event.epoch];
+eventlatency = [EEG.event.latency];
+% Find events of interest
+isE1 = strcmp(first_event,eventlabels);
+isE2 = strcmp(second_event,eventlabels);
+
+% Get time between events 
+if one_per_epoch % retun 1xnTrials vector
+    % Set up
+    nEpochs = EEG.trials;
+    timebetween = nan(1,nEpochs);
+    for i=1:nEpochs
+        % Find the right events
+        e1 = find(eventepochs == i & isE1, 1);
+        e2 = find(eventepochs == i & isE2, 1);
+        if ~isempty(e1) && ~isempty(e2)
+            timebetween(i) = eventlatency(e2) - eventlatency(e1);
+        end
+    end
+    
+else % return 1xnE2 vector
+    % Set up
+    allE1 = find(isE1);
+    allE2 = find(isE2);
+    timebetween = nan(1,numel(allE2));        
+    for i=1:numel(allE2)
+        % Find the right events
+        e2 = allE2(i);
+        e1 = allE1(find(allE1<=allE2(i) & eventepochs(allE1)==eventepochs(e2), 1, 'last'));
+        if ~isempty(e1)
+            timebetween(i) = eventlatency(e2) - eventlatency(e1);
+        end
+    end
+end
+
+% Convert to ms
+timebetween = timebetween/s
+        

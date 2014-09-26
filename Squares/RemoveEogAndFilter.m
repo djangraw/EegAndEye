@@ -1,0 +1,48 @@
+function RemoveEogAndFilter(subject,sessions,input_suffix,output_suffix)
+
+% RemoveEogAndFilter(subject,sessions,input_suffix,output_suffix)
+%
+% Created 7/2/12 by DJ.
+
+% Set constants
+nSessions = numel(sessions);
+BLINK_EXPAND = 0;
+OUTSIDE_WINDOW = 25;
+
+lowpass_cutoff = 50;
+lpf_order = 12;
+lpf_useIIR = 1;
+new_fs = 1000/6;
+highpass_cutoff = 1;
+
+
+for i=1:nSessions
+   
+    % get filenames
+    input_filename = sprintf('sq-%d-%d-%s.set',subject,sessions(i),input_suffix);
+    behavior_filename = sprintf('sq-%d-%d.mat',subject,sessions(i));
+    output_filename = sprintf('sq-%d-%d-%s.set',subject,sessions(i),output_suffix);
+    samples_filename = sprintf('sq-%d-%d-eyepos.mat',subject,sessions(i));
+    % load dataset
+    EEG = pop_loadset(input_filename);
+    load(behavior_filename); % loads x
+    samples = load(samples_filename);
+    % remove blinks
+    EEG_noblinks = blinkartifacts(EEG,BLINK_EXPAND,OUTSIDE_WINDOW);
+    % remove eog component
+    [comp, offs] = FindEogComponent_Squares(EEG_noblinks,x);
+    EEG_noeog = RemoveEogComponent_Squares(EEG_noblinks,x,samples.eyepos,comp);
+    % Filter data
+    EEG_filtered = pop_eegfilt( EEG_noeog, 0, lowpass_cutoff, lpf_order, 0, lpf_useIIR);
+    EEG_filtered = pop_resample_myfilter(EEG_filtered,new_fs,0); % do not apply filter
+    EEG_filtered = pop_eegfilt( EEG_filtered, highpass_cutoff, 0, [], 0);
+    % Resample data structure accordingly
+    x = ResampleEeg(x, new_fs);
+    save(behavior_filename, 'x');
+    % Save results
+    pop_saveset(EEG_filtered,'filename',output_filename);
+end
+
+%Combine sessions
+CombineEeglabSessions(subject,sessions,['-' output_suffix],['-all-' output_suffix],'Squares');
+saveBehaviorData(subject,sessions,'sq');

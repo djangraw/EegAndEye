@@ -1,0 +1,16 @@
+o% LoadEpochs.m
+%
+% Variable 'subject' must be defined.
+%
+% Created 12/21/10 by DJ.
+
+%% LOAD 
+
+% Load results    
+EEG = pop_loadset('filename',sprintf('%d-TargetApp.set',subject));
+% EEG = pop_loadset('filename',sprintf('%d-TargetSac2.set',subject));
+[ALLEEG, EEG, CURRENTSET] = eeg_store( ALLEEG, EEG, 0 );
+EEG = pop_loadset('filename',sprintf('%d-DistractorApp.set',subject));
+% EEG = pop_loadset('filename',sprintf('%d-DistractorSac2.set',subject));
+[ALLEEG, EEG, CURRENTSET] = eeg_store( ALLEEG, EEG, 0 );
+eeglab redraw;

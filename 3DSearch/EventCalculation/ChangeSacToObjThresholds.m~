@@ -1,0 +1,43 @@
+function ChangeSacToObjThresholds(subject,sessions,pixelThresholds,timeLimits,eventsRule,singleSuffix,combinedSuffix)
+
+% Changes the thresholds for detecting saccades to objects and recalculates
+% EEGLAB events.
+%
+% ChangeSacToObjThresholds(subject,sessions,pixelThresholds,timeLimits)
+%
+% INPUTS:
+% -subject is the subject number
+% -sessions is a vector of all the sessions for that subject.
+% -thresholds is a vector of distances (in pixels, from the saccade 
+% endpoint to the object) that a saccade must be within to be considered a
+% saccade "to the object". The first saccade inside thresholds(1) will be 
+% used. If that doesn't exist, the first saccade inside threshold 2 will be
+% used (and so on). [Default: 50 100 150]
+% -timeLimits is a 2-element vector with the start and end times, in ms,
+% that are acceptable for a saccade to be counted.  [Default: 0 Inf]
+%
+% Created 2/23/11 by DJ.
+
+% Handle defaults
+if nargin<7 || isempty(combinedSuffix)
+    combineSuffix = '-all-filtered';
+end
+if nargin<6 || isempty(singleSuffix)
+    singleSuffix = '-filtered';
+end
+if nargin<5 || isempty(eventsRule)
+    eventsRule = 'EarlySaccades';
+end
+
+% Add events
+for i=1:numel(sessions)
+    session = sessions(i);
+    load(sprintf('3DS-%d-%d.mat',subject,session));
+    x.eyelink.saccade_events = classify_saccades(x.eyelink.saccade_times,x.eyelink.saccade_positions,x.eyelink.object_limits,pixelThresholds,timeLimits);
+    x = EyelinkToEegTimes(x);
+    save(sprintf('3DS-%d-%d.mat',subject,session), 'x');
+    
+    AddEeglabEvents(subject,session,singleSuffix,eventsRule);
+end
+% Recombine sessions
+CombineEeglabSessions(subject,sessions,singleSuffix,combinedSuffix)

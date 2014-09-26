@@ -1,0 +1,85 @@
+function [ts_limits] = get_objectlimits(text_file, hasMSG)
+
+% This function takes an events text file (the result of a Unity
+% "replay" if hasMSG==1 or eyelink text file if hasMSG==0) and extracts the
+% limits of the object at each time specified in the file.
+%
+% [ts_limits] = get_objectlimits(text_file, hasMSG);
+%
+% INPUTS:
+% - text_file should be the filename of the events text file.
+% It is usually something like "post-3DS-1-1.txt".
+% - hasMSG is a binary value indicating whether each row is preceded by 
+% "MSG XXXX" (where XXXX is an eyelink timestamp). This would be the case
+% if the events file was recorded by eyelink and not Unity directly.
+%
+% OUTPUTS:
+% - ts_limits will be an nx7 matrix, where n is the number of
+% frames in which an object was visible.  The first column is an eyelink 
+% timestamp, and the second is the number of the object visible at that 
+% time.  The next four columns represent the left, top, width and height 
+% of the object's visual limits on-screen at that time. The final column is
+% the fraction of the object that was visible at that time. 
+%
+% NOTES:
+% - To create the events text file quickly with imprecise object limits,  
+% run a Unity 3DS experiment with option recordObjBox on, run the .edf file 
+% through the program Visual EDF2ASC,then call this function with the .asc 
+% file it produces and hasMSG=1.
+% - To create the events file with more precise timing, run the .edf file 
+% created during a 3DS experiment through the program Visual EDF2ASC, then 
+% use that text file as input to a Unity Replay.  Call this function with 
+% the resulting .txt file and hasMSG=0.
+% - For this to run properly, text_file must be made using the 
+% replay function of 3DSearch version 5.4 or later in Unity, or the
+% non-replay experiment of 3DSearch version 7.1 or later.
+%
+% Created 8/18/10 by DJ based on get_objectevents.
+% Updated 8/25/10 by DJ - added fracVisible, the 7th output column.
+% Updated 1/8/13 by DJ - added hasMSG input (see above).
+
+% Handle inputs
+if nargin<2 || isempty(hasMSG)
+    hasMSG = false;
+end
+
+GetNumbers;
+
+% Setup
+fid = fopen(text_file);
+fseek(fid,0,'eof'); % find end of file
+eof = ftell(fid);
+fseek(fid,0,'bof'); % rewind to beginning
+
+word = 'visible'; % the word we check for to find real events
+ts_limits = [];%repmat(NaN,1000,2); %each row is timestamp, event
+i = 0;          % number of messages found so far
+
+% Get the event messages
+while ftell(fid) < eof % if we haven't reached the end of the text file
+    str = fgetl(fid); % read in next line of text file
+    if findstr(str,word); % check for the code-word indicating a message was written
+        i = i+1; % increment number of messages found
+        % example str: Object  20  visible at  (left:1,top:2,width:3,height:4)  at time  1234567
+        if hasMSG
+            values = textscan(str,'%*s\t%d\t%*s\t%d\t%*s\t%s\t%*s\t%f','Delimiter','\t'); % read timestamp and message numbers into ts_events
+        else
+            values = textscan(str,'%*s\t%d\t%*s\t%s\t%*s\t%d\t%*s\t%f','Delimiter','\t'); % read timestamp and message numbers into ts_events
+        end
+        ts_limits(i,1) = values{3}; %event timestamp
+        ts_limits(i,2) = values{1}; %object number
+        ts_limits(i,3:6) = sscanf(values{2}{1},'(left:%f, top:%f, width:%f, height:%f)'); % read timestamp and message numbers into ts_events        
+        ts_limits(i,7) = values{4}; %fraction of object that was visible
+    end
+end
+
+%ts_events = ts_events(1:i,:);
+
+% Did we find any messages?
+if numel(ts_limits) == 0 % if no
+    warning(sprintf('Couldn''t find ''%s'' anywhere in document ''%s''!'...
+        ,word,text_file))
+end
+
+% Clean up
+fclose(fid);

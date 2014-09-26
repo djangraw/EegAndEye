@@ -1,0 +1,47 @@
+function button_times = find_buttonevents(text_file)
+
+% button_times = find_buttonevents(text_file)
+%
+% - This function takes an eyelink text file and extracts the times when
+% a button was pressed.  This currently happens only when the subject sees
+% a target.
+% - The INPUT text_file should be the filename of the eyelink text file.
+% - To create the eyelink text file, run the .edf file created during a
+% 3D Search (3DS) experiment through the program Visual EDF2ASC.
+% - The OUTPUT button_times will be an n-element vector, where each element is
+% the eyelink time at which a (any) button was pressed.
+%
+% Created 7/26/10 by DJ (based on find_writeioport)
+% Updated 8/18/10 by DJ - changed word and sscanf usage to fit output of
+%   Visual EDF2ASC instead of a DataViewer text file.
+
+% Setup
+fid = fopen(text_file);
+fseek(fid,0,'eof'); % find end of file
+eof = ftell(fid);
+fseek(fid,0,'bof'); % rewind to beginning
+
+word = 'BUTTON'; % the word we check for to find relevant events
+button_times = []; %each row is timestamp, event
+i = 0;          % number of messages found so far
+
+% Get the write_ioport messages
+while ftell(fid) < eof % if we haven't reached the end of the text file
+    str = fgetl(fid); % read in next line of text file
+    if findstr(str,word) % check for the code-word indicating a message was written
+        values = sscanf(str,'BUTTON %d %*d %d'); % Message format: BUTTON <time> <button #> <state>
+        if values(2) == 1
+            i = i+1; % increment number of messages found
+            button_times(i) = values(1); % read timestamp and message numbers into ts_events
+        end
+    end
+end
+
+% Did we find any messages?
+if i == 0 % if no
+    warning(sprintf('Couldn''t find ''%s'' anywhere in document ''%s''!'...
+        ,word,text_file))
+end
+
+% Clean up
+fclose(fid);

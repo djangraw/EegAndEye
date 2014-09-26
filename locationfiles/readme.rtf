@@ -1,0 +1,27 @@
+{\rtf1\mac\ansicpg10000\cocoartf824\cocoasubrtf480
+{\fonttbl\f0\fmodern\fcharset77 Courier;}
+{\colortbl;\red255\green255\blue255;}
+\margl1440\margr1440\vieww9000\viewh8400\viewkind0
+\deftab720
+\pard\pardeftab720\ql\qnatural
+
+\f0\fs26 \cf0 I have attached four files in this email, which are:\
+\
+Preprocess_newamp_rewire.m: my code for preprocessing (removal of eye artifacts, DC \
+drifts and high frequency noise), normally this is the first step of an EEG analysis \
+after some raw data are collected.\
+\
+readEEG_b4preprocessing.m: this file is only needed in the preprocessing code.\
+\
+readEEG.m: I use this file to read EEG data that have been preprocessed.\
+\
+data_extract.m: an example file that shows how to call the readEEG.m\
+\
+The sampling frequency is 1000Hz. I didn't set fs in the readEEG_b4preprocessing.m but \
+have used 36*1024 points of data for testing the code, now that part of the code has been \
+commented out.\
+\
+Hope this helps, should you have any further questions, pls let me know.\
+\
+cheers,\
+An}

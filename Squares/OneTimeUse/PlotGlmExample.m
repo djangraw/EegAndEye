@@ -1,0 +1,159 @@
+% PlotGlmExample.m
+%
+% Created 9/10/12 by DJ.
+% Updated 10/25/13 by DJ - added group plots.
+
+h = [1:5; 5:-1:1; 2 5 5 5 2]/10;
+
+% Ts = [4 11; 7 18; 10 15];
+Ts = [4 11; 7 18; 10 15]-2;
+s = zeros(3,20);
+for i=1:3
+    s(i,Ts(i,:)) = 1;
+end
+
+e = zeros(1,24);
+for i=1:3
+    e(i,:) = conv(s(i,:),h(i,:));
+end
+% e = e(:,3:end-2);
+e = e(:,1:end-4);
+
+E = sum(e,1);
+
+H = reshape(h',numel(h),1);
+
+S = zeros(15,20);
+for i=1:5
+%     S(i:5:end,i+1:i+15) = s(:,4:18);
+    S(i:5:end,i+1:i+15) = s(:,2:16);
+end
+
+SH = zeros(size(S));
+for i=1:size(S,1)
+    SH(i,:) = S(i,:)*H(i);
+end
+
+E2 = H'*S;
+
+if ~isequal(E,E2)
+    warning('Does not match!');
+end
+
+% th = -2:2;
+th = 0:4;
+[Rs,Cs] = find(s~=0); % rows/cols at which s==1
+T = length(th); % # offsets
+p = size(h,1); % # events
+n = size(s,2); % # time points
+
+%% PLOTS
+
+figure(1); clf; set(gcf,'position',[0   1350   140   130]);
+imagesc(th,1:p,h); colormap gray; set(gca,'CLim',[0 1]); hold on;
+axis equal; axis([th(1)-0.5, th(end)+0.5, 0.5, p+0.5]); xlabel('offset'); set(gca,'ytick',[]);
+plot([0 0],[0.5 p+0.5],'r');
+for i=1:p
+    rectangle('Position',[th(1)-0.5 i-0.5 T 1],'edgecolor','b');
+end
+figure(2); clf; set(gcf,'Position',[140   1350   560   130]); 
+clf; imagesc(s); colormap gray; set(gca,'CLim',[0 1]); hold on; 
+axis equal; axis([0.5, n+0.5, 0.5, p+0.5]); xlabel('time'); set(gca,'ytick',[]);
+for i=1:p
+    for j=1:2
+        plot([Ts(i,j) Ts(i,j)],i+[.5 -.5],'r');
+    end
+    rectangle('Position',[0.5 i-0.5 n+0.5 1],'edgecolor','b');
+end
+figure(3); clf; set(gcf,'Position',[700   1350   560   130]); 
+imagesc(e); colormap gray; set(gca,'CLim',[0 1]); hold on; 
+axis equal; axis([0.5, n+0.5, 0.5, p+0.5]); xlabel('time'); set(gca,'ytick',[]);
+for i=1:p
+    for j=1:2
+        plot([Ts(i,j) Ts(i,j)],i+[.5 -.5],'r');
+        rectangle('Position',[Ts(i,j)+th(1)-0.5 i-0.5 T 1],'edgecolor','b');
+    end
+end
+figure(4); clf; set(gcf,'Position',[1260   1350   560   130]); 
+imagesc(E); colormap gray; set(gca,'CLim',[0 1]); 
+axis equal; axis([0.5, n+0.5, 0.5, 1.5]); xlabel('time'); set(gca,'ytick',[]);
+
+figure(5); clf; set(gcf,'Position',[0   850   140   420]);
+imagesc(H); colormap gray; set(gca,'CLim',[0 1]); hold on;
+axis equal; axis([0.5, 1.5, 0.5, p*T+0.5]); set(gca,'xtick',[]); set(gca,'ytick',[]);
+for i=1:p
+    plot([0.5 1.5], [(i-1)*T+find(th==0), (i-1)*T+find(th==0)],'r');
+    rectangle('Position',[0.5 i*5-4.5 1 5],'edgecolor','b');
+end
+
+figure(6); clf; set(gcf,'Position',[140   850   560   420]);
+imagesc(S); colormap gray; set(gca,'CLim',[0 1]); hold on;
+axis equal; axis([0.5, n+0.5, 0.5, p*T+0.5]); xlabel('time'); set(gca,'ytick',[]);
+for i=1:p
+    for j=1:2
+        plot([Ts(i,j) Ts(i,j)],i*5+[-4.5 .5],'r');
+%         rectangle('Position',[Ts(i,j)-2.5 i*5-4.5 5 5],'edgecolor','b');
+    end    
+    rectangle('Position',[0.5 (i-1)*5+0.5 n 5],'edgecolor','b');
+end
+figure(7); clf; set(gcf,'Position',[700   850   560   420]);
+imagesc(SH); colormap gray; set(gca,'CLim',[0 1]); hold on;
+axis equal; axis([0.5, n+0.5, 0.5, p*T+0.5]); xlabel('time'); set(gca,'ytick',[]);
+for i=1:p
+    for j=1:2
+        plot([Ts(i,j) Ts(i,j)],i*5+[-4.5 .5],'r');
+        rectangle('Position',[Ts(i,j)+th(1)-0.5 (i-1)*T+0.5 T T],'edgecolor','b');
+    end
+end
+figure(8); clf; set(gcf,'Position',[1260   850   560   420]);
+imagesc(E2); colormap gray; set(gca,'CLim',[0 1]);
+axis equal; axis([0.5, n+0.5, 0.5, 1.5]); xlabel('time'); set(gca,'ytick',[]);
+
+
+%% Group-Level GLM
+
+H_subj1 = H(1:T);
+H_subj2 = H_subj1*2;
+H_subj3 = H_subj1*0.5;
+
+H_group = cat(1,H_subj1,H_subj2,H_subj3);
+
+X_group = cat(1,eye(T), 2*eye(T), 0.5*eye(T))/2;
+
+B_group = H_subj1 * 3.5/3;
+
+figure(9); clf;
+imagesc(B_group); colormap gray; set(gca,'CLim',[0 1]);
+axis equal; axis([0.5, 1.5, 0.5, T+0.5]); set(gca,'xtick',[]); set(gca,'ytick',[]);
+
+figure(10); clf;
+imagesc(X_group'); colormap gray; set(gca,'CLim',[0 1]); hold on;
+axis equal; axis([0.5, 3*T+0.5, 0.5, T+0.5]); set(gca,'xtick',[]); set(gca,'ytick',[]);
+for j=1:3
+    Ti = T*(j-1)+1;
+    plot([Ti Ti],[0.5 5.5],'r');
+    rectangle('Position',[Ti-0.5 .5 T 5.5],'edgecolor','b');    
+end 
+
+X_group2 = zeros(size(X_group));
+for i=1:size(X_group,2)
+    X_group2(:,i) = X_group(:,i)*B_group(i);
+end
+figure(11);
+imagesc(X_group2'); colormap gray; set(gca,'CLim',[0 1]); hold on;
+axis equal; axis([0.5, 3*T+0.5, 0.5, T+0.5]); set(gca,'xtick',[]); set(gca,'ytick',[]);
+for j=1:3
+    Ti = T*(j-1)+1;
+    plot([Ti Ti],[0.5 5.5],'r');
+    rectangle('Position',[Ti-0.5 .5 T 5.5],'edgecolor','b');
+end 
+
+figure(12);
+imagesc(H_group'); colormap gray; set(gca,'CLim',[0 1]); hold on;
+axis equal; axis([0.5, 3*T+0.5, 0.5, 1.5]); set(gca,'xtick',[]); set(gca,'ytick',[]);
+for j=1:3
+    Ti = T*(j-1)+1;
+    plot([Ti Ti],[0.5 1.5],'r');
+    rectangle('Position',[Ti-0.5 .5 T 1],'edgecolor','b');
+end 
+

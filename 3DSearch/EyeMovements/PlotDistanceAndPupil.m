@@ -1,0 +1,131 @@
+function PlotDistanceAndPupil(x,samples,pupilsize,trialsToPlot)
+
+% Plots the distance of each saccade from an object over the time an object
+% is visible.
+%
+% PlotDistanceAndPupil(x,samples,pupilsize,trialsToPlot)
+%
+% INPUTS:
+% - x is a standard 3DSearch behavioral data struct.
+% - samples is an nx2 matrix containing a ms-by-ms record of the x and y 
+% position of the subject's eyes onscreen.
+% - pupilsize is an n-element vector containing a ms-by-ms record of the
+% size of the subject's pupils in ms.
+% - trialsToPlot is a vector of the numbers of the trials we want to plot
+% [default = 1:(# object appear events)]
+%
+% Created 8/5/11 by DJ based on program PlotSaccadeDistance.
+% Updated 8/8/11 by DJ - added ApplyEyeCalibration, trialsToPlot.
+
+% SET UP
+% Set up visible times info
+visibletimes = GetVisibleTimes(x,'eyelink');
+obj = visibletimes(:,1);
+isTarget = strcmp('TargetObject',{x.objects(obj).tag});
+appeartimes = visibletimes(:,2);
+disappeartimes = visibletimes(:,3);        
+object_limits = x.eyelink.object_limits;
+samples = ApplyEyeCalibration(samples,x);
+blinkranges = BlinkRange(x);
+if nargin<4
+    trialsToPlot = 1:numel(appeartimes);
+end
+
+samples = InterpolateBlinks(samples,x.eyelink.record_time-1+(1:length(pupilsize)),blinkranges);
+pupilsize = InterpolateBlinks(pupilsize,x.eyelink.record_time-1+(1:length(pupilsize)),blinkranges);
+
+% Set up plot
+cla; hold on;
+colors = 'br';
+% colors = 'cm'; 
+types = {'distractor' 'target'};
+
+% MAIN CODE           
+sample_times = x.eyelink.record_time-1 + (1:length(samples));
+sample_positions = samples;
+% Set up
+fprintf('Plotting Distance and Pupil for %d trials...\n   Press any key to advance to next trial\n',numel(trialsToPlot));
+MakeLegend({'r-','b-','g:','g-','m:','m-','k--'},{'target','distractor','start sacc', 'end sacc','start blink','end blink','button'});
+% Find all saccades made during each appearance and find distance from obj
+for j=trialsToPlot    
+    % Find the distance from each applicable saccade to the object's bounding box
+    sac_subset = find(sample_times>appeartimes(j) & sample_times < disappeartimes(j));
+    dist = Inf(numel(sac_subset),1); % the distance to the bounding box (preallocate for speed)
+    t = sample_times(sac_subset); % times when these saccades were made
+    for k=1:numel(sac_subset)
+        % Get the time when this object was last seen
+        iLastLimit = find(object_limits(:,2)==obj(j) & object_limits(:,1)<t(k),1,'last');
+        % Get object limits
+        left = object_limits(iLastLimit,3);
+        top = object_limits(iLastLimit,4);
+        width = object_limits(iLastLimit,5);
+        height = object_limits(iLastLimit,6);
+        % Get saccade position
+        px = sample_positions(sac_subset(k),1);
+        py = sample_positions(sac_subset(k),2);
+        % Get shortest distance from saccade position to object box
+        if isnan(px)
+            dx = NaN;
+        elseif px<left
+            dx = left-px;
+        elseif px>left+width
+            dx = px-(left+width);
+        else 
+            dx = 0;
+        end
+        if isnan(py)
+            dy = NaN;
+        elseif py<top
+            dy = top-py;
+        elseif py>top+height
+            dy = py-(top+height);
+        else
+            dy = 0;
+        end
+        dist(k) = sqrt(dx*dx + dy*dy);
+    end
+    
+    
+    % Get saccade and event info
+    isIn_startsac = (x.eyelink.saccade_start_times > appeartimes(j) & x.eyelink.saccade_start_times < disappeartimes(j));
+    isIn_endsac = (x.eyelink.saccade_times > appeartimes(j) & x.eyelink.saccade_times < disappeartimes(j));
+    isIn_button = (x.eyelink.button_times > appeartimes(j) & x.eyelink.button_times < disappeartimes(j));
+    isIn_blinkstart = (blinkranges(:,1) > appeartimes(j) & blinkranges(:,1) < disappeartimes(j));
+    isIn_blinkend = (blinkranges(:,2) > appeartimes(j) & blinkranges(:,2) < disappeartimes(j));
+    
+    %Plot eye distance over time
+    subplot(2,1,1); cla; %set(gca,'ButtonDownFcn','MakeEyeMovie(samples,pupilsize,x,appeartimes(j)-x.eyelink.record_time);');
+    plot(t-appeartimes(j),dist,colors(isTarget(j)+1));
+    hold on      
+    % Plot saccade and event info
+    PlotVerticalLines(x.eyelink.saccade_start_times(isIn_startsac)-appeartimes(j),'g:');
+    PlotVerticalLines(x.eyelink.saccade_times(isIn_endsac)-appeartimes(j),'g-');    
+    PlotVerticalLines(blinkranges(isIn_blinkstart,1)-appeartimes(j),'m:');
+    PlotVerticalLines(blinkranges(isIn_blinkend,2)-appeartimes(j),'m-');
+    PlotVerticalLines(x.eyelink.button_times(isIn_button)-appeartimes(j),'k--');    
+    % Annotate plot
+    ylabel('distance from object (pixels)');
+    title(sprintf('Subject %d, Session %d, trial %d (%s)',x.subject,x.session,j,types{isTarget(j)+1}));
+
+%% PUPIL SIZE
+    % Find the distance from each applicable saccade to the object's bounding box
+    sac_subset = find(sample_times>appeartimes(j) & sample_times < disappeartimes(j));
+    dist = pupilsize(sac_subset); % the distance to the bounding box (preallocate for speed)
+    t = sample_times(sac_subset); % times when these saccades were made
+
+    %Plot pupil size over time
+    subplot(2,1,2); cla;
+    plot(t-appeartimes(j),dist,colors(isTarget(j)+1));
+    hold on
+    % Plot saccade and event info
+    PlotVerticalLines(x.eyelink.saccade_start_times(isIn_startsac)-appeartimes(j),'g:');
+    PlotVerticalLines(x.eyelink.saccade_times(isIn_endsac)-appeartimes(j),'g-');    
+    PlotVerticalLines(blinkranges(isIn_blinkstart,1)-appeartimes(j),'m:');
+    PlotVerticalLines(blinkranges(isIn_blinkend,2)-appeartimes(j),'m-');
+    PlotVerticalLines(x.eyelink.button_times(isIn_button)-appeartimes(j),'k--');   
+    % Annotate plot
+    ylabel('pupil size (a.u.)');
+    xlabel('time from object appearance (ms)')
+    pause;
+
+end

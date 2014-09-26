@@ -1,0 +1,105 @@
+function PlotSaccadeDistance(x,samples,pupilsize)
+
+% Plots the distance of each saccade from an object over the time an object
+% is visible.
+%
+% PlotSaccadeDistance(x,samples,pupilsize)
+%
+% -If only x is given as an input, plots the saccades over time.
+% -If samples is also given, plots the distance from the eye to the object
+% every sample.
+% -If pupilsize is also given, plots the size of hte 
+%
+% Created 9/7/10 by DJ.
+% Updated 9/13/10 by DJ - changed name from MakeSaccadeHistogram.
+
+% HANDLE INPUTS
+if nargin>2
+    plotme = 'pupilsize';
+elseif nargin>1
+    plotme = 'samples';
+else
+    plotme = 'saccades';
+end
+
+% SET UP
+% Set up visible times info
+visibletimes = GetVisibleTimes(x,'eyelink');
+obj = visibletimes(:,1);
+isTarget = strcmp('TargetObject',{x.objects(obj).tag});
+appeartimes = visibletimes(:,2);
+disappeartimes = visibletimes(:,3);        
+object_limits = x.eyelink.object_limits;
+
+% Set up plot
+cla; hold on;
+colors = 'br';
+% colors = 'cm'; 
+
+% MAIN CODE
+switch plotme
+    case {'saccades','samples'}
+        if strcmp(plotme,'saccades');
+            saccade_times = x.eyelink.saccade_times;
+            saccade_positions = x.eyelink.saccade_positions;
+        else                
+            saccade_times = x.eyelink.record_time-1 + (1:length(samples));
+            saccade_positions = samples;
+        end
+        
+        % Find all saccades made during each appearance and find distance from obj
+        for j=1:numel(appeartimes)
+            % Find the distance from each applicable saccade to the object's bounding box
+            sac_subset = find(saccade_times>appeartimes(j) & saccade_times < disappeartimes(j));
+            dist = Inf(numel(sac_subset),1); % the distance to the bounding box (preallocate for speed)
+            t = saccade_times(sac_subset); % times when these saccades were made
+            for k=1:numel(sac_subset)
+                % Get the time when this object was last seen
+                iLastLimit = find(object_limits(:,2)==obj(j) & object_limits(:,1)<t(k),1,'last');
+                % Get object limits
+                left = object_limits(iLastLimit,3);
+                top = object_limits(iLastLimit,4);
+                width = object_limits(iLastLimit,5);
+                height = object_limits(iLastLimit,6);
+                % Get saccade position
+                px = saccade_positions(sac_subset(k),1);
+                py = saccade_positions(sac_subset(k),2);
+                % Get shortest distance from saccade position to object box
+                if px<left
+                    dx = left-px;
+                elseif px>left+width
+                    dx = px-(left+width);
+                else 
+                    dx = 0;
+                end
+                if py<top
+                    dy = top-py;
+                elseif py>top+height
+                    dy = py-(top+height);
+                else
+                    dy = 0;
+                end
+                dist(k) = sqrt(dx*dx + dy*dy);
+            end
+
+            %Plot a line over time
+            plot(t-appeartimes(j),dist,colors(isTarget(j)+1));
+
+        end
+    otherwise
+        saccade_times = x.eyelink.record_time-1 + (1:length(pupilsize));
+        for j=1:numel(appeartimes)
+            % Find the distance from each applicable saccade to the object's bounding box
+            sac_subset = find(saccade_times>appeartimes(j) & saccade_times < disappeartimes(j));
+            dist = pupilsize(sac_subset); % the distance to the bounding box (preallocate for speed)
+            t = saccade_times(sac_subset); % times when these saccades were made
+            
+            %Plot a line over time
+            plot(t-appeartimes(j),dist,colors(isTarget(j)+1));
+
+        end
+end
+
+title(sprintf('Subject %d, Session %d',x.subject,x.session));
+xlabel('time from object appearance (ms)')
+ylabel('distance from target (pixels)');

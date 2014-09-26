@@ -1,0 +1,93 @@
+function PlotChannelErp(dataPlus, dataMinus, time, channel)
+
+% Plots the ERP for a single channel, including the difference and standard error bars.
+% Results will be filtered with a 30-Hz LPF (Butterworth 5th order) before plotting.
+%
+% PlotChannelErp(dataPlus, dataMinus, time)
+%
+% INPUTS:
+% dataPlus is an mxn matrix of data (in uV), where each row is a trial.
+% dataMinus is an mxn matrix of data (in uV), where each row is a trial.
+% time is an n-element vector of time values for the data samples (in ms).
+% channel is a string or number indicating the channel being plotted.
+%
+% Created 12/20/10 by DJ.
+
+%% SET UP
+% Handle inputs
+if nargin<4
+    channel = '';
+end
+nPlus = size(dataPlus,1);
+nMinus = size(dataMinus,1);
+
+% Convert to doubles
+dataPlus = double(dataPlus);
+dataMinus = double(dataMinus);
+% dataDiff = dataPlus-dataMinus;
+
+% Calculate averages
+avgPlus = mean(dataPlus,1);
+avgMinus = mean(dataMinus,1);
+% avgDiff = mean(dataDiff,1);
+avgDiff = avgPlus - avgMinus;
+
+% Calculate standard error bars
+stdPlus = std(dataPlus,1)/sqrt(nPlus);
+stdMinus = std(dataMinus,1)/sqrt(nMinus);
+% stdDiff = std(dataDiff,1)/sqrt(nRows);
+
+%% FILTER
+filter_cutoff = 30;
+fs = 1000/(time(2)-time(1));
+[b, a] = butter(5,filter_cutoff/fs*2);
+% Filter averages
+avgPlus = filtfilt(b,a,avgPlus);
+avgMinus = filtfilt(b,a,avgMinus);
+avgDiff = filtfilt(b,a,avgDiff);
+
+% % Filter standard error bars
+% stdPlus = filtfilt(a,b,stdPlus);
+% stdMinus = filtfilt(a,b,stdMinus);
+% stdDiff = filtfilt(a,b,stdDiff);
+
+%% STATISTICS
+alpha = 0.05;
+for i=1:size(dataPlus,2)
+    [p(i),h(i)] = ranksum(dataPlus(:,i),dataMinus(:,i),'alpha',alpha); % test hypothesis that median is zero
+end
+
+fprintf('%d significant epochs at alpha=%g\n',sum(h),alpha);
+
+%% PLOT
+figure; 
+% Resize figure
+pos = get(gcf,'Position');
+set(gcf,'Position',[pos(1:2) 600 250]);
+% Format axes
+xlim([-200 1000]);
+ylim([-10 15]);
+box on; hold on;
+
+% Plot Averages and Standard Error Bars
+JackKnife(time,avgPlus,stdPlus,'b','b');
+JackKnife(time,avgMinus,stdMinus,'r','r');
+plot(time,avgDiff,'k','linewidth',2); % without error bars
+% JackKnife(time,avgDiff,stdDiff,'k','k'); % with error bars
+
+% Plot significant times
+ylimits = get(gca,'ylim');
+plot(time(h),repmat(ylimits(2)-1,1,sum(h)),'g+');
+
+% Plot axes
+plot(get(gca,'xlim'),[0 0],'k');
+plot([0 0],get(gca,'ylim'),'k');
+
+% Annotate Plot
+xlabel('time (ms)');
+ylabel('voltage (uV)');
+title(['Channel ' num2str(channel) ' ERP']);
+MakeLegend({'b-' 'r-' 'k-'},{sprintf('Targets (n=%d)',nPlus) sprintf('Distractors (n=%d)',nMinus) 'Difference'},[2 2 2]);
+
+
+

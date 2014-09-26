@@ -1,0 +1,171 @@
+function outputArray = CheckButtonPress(mainStruct, initialTypeStr)
+
+% CheckButtonPress
+%
+% Produces an array determining whether during each button press, whether
+% the object was a target or non-target, or if there were no objects at all
+%
+% outputArray = CheckButtonPress(mainStruct, initialTypeNum)
+% INPUT: mainStruct is the main structure file containing the particular
+% session
+% INPUT: initialTypeStr is a string indicating which times should be used as
+% anchors for reaction time
+%   Input 'objects' for OBJECT APPEARANCE
+%   Input 'saccades1' for FIRST SACCADE
+%   Input 'saccades2' for LAST SACCADE
+% OUTPUT: outputArray is the array of anchors for reaction time, along with
+% the time at which they occured. The first type of output is the
+% 'isTargetArray', which returns an array of the whether the objects that 
+% were present during each button press were targets or distractors, along 
+% with the time at which the objects appeared. If there was not EXACTLY 
+% one object on the screen, this was stored as NaN. The second type of 
+% output is the 'saccadeArray', which returns an array of objects that were 
+% saccaded to, and the time of the saccade.
+%
+% Created 7/30/10 by Ansh Johri.
+% Updated 8/02/10 by Ansh Johri - added time of object appearance to final 
+% vectors. 
+% Updated 8/03/10 by Ansh Johri - added user input for either saccades or 
+% objects. Provides options for both FIRST saccade to object and SECOND saccade.
+% Updated 2/15/11 by DJ - now button_times can be a column vector
+
+appearedObjects = [];
+disappearedObjects = [];
+objectsArray = [];
+saccadesArray = [];
+isTargetArray = [];
+samplingFactor = mainStruct.eeg.eventsamplerate/ 1000;
+
+% Creates arrays that contain all the appeared objects and all the
+% disappeared objects in the order they occur. Also keeps track of when
+% these events occur: array = [time (s), event (object number)]
+ 
+initialTypeNum = 0;
+
+
+switch lower(initialTypeStr)        %% Determine the type of initial event. Display error if choice is unavailable.
+    case {'objects'}
+        initialTypeNum = 0;
+    case {'saccades1'}
+        initialTypeNum = 11;
+    case {'saccades2'}
+        initialTypeNum = 12;
+    otherwise             
+        error('Error.. please select "objects," "saccades1," or "saccades2." Defaulting to objects...')
+end
+
+for i = 1: size(mainStruct.eeg.object_events)  % Run for each event in event array
+    curTime = mainStruct.eeg.object_events(i,1)/samplingFactor;   % Get current time
+    curObj = mainStruct.eeg.object_events(i,2);  % Get event
+    curType = floor(curObj/50); % Determine what type of event it is (0 = saccade, 1 = object appearance, 2 = disappearance)
+    
+    if curType == 1  % If object appears
+       appearedObjects = vertcat(appearedObjects,  [curTime, (curObj-50)]);  % Store time/object in array
+    end
+    if curType == 2  % If object disappears
+       disappearedObjects = vertcat(disappearedObjects,  [curTime, (curObj-100)]);  % Store time/object in another array
+    end
+end
+ 
+ 
+% Creates arrays of all the objects that appeared and disappeared up to the
+% time point of each button press, by truncating the arrays
+% created above accordingly. After doing this, it checks to see which
+% objects had APPEARED but NOT DISAPPEARED (i.e. found in appeared matrix
+% not disappeared matrix) when each button was pressed. Prints out these
+% objects and whether they were targets or non-targets.
+ 
+ 
+y = length(mainStruct.eeg.button_times);  
+for i = 1:y  % Loop for the each button press
+ 
+    buttonTime = mainStruct.eeg.button_times(i)/samplingFactor ;  % Time (s) when the button was pressed
+ 
+    truncatedAppearedObjects = [];   % Recreate the arrays of interest
+    truncatedDisappearedObjects = [];
+    j = 1;
+    while j<=length(appearedObjects) & appearedObjects(j,1) <  buttonTime  % Truncate the original appeared objects matrix such that it only contains the elements before the button press.
+        truncatedAppearedObjects = vertcat(truncatedAppearedObjects, appearedObjects(j,:));
+        j = j+1;
+    end 
+    j= 1;
+    while j<=length(disappearedObjects) & disappearedObjects(j,1) <  buttonTime  % Same thing, except with the object disappearances
+        truncatedDisappearedObjects = vertcat(truncatedDisappearedObjects, disappearedObjects(j,:));
+        j = j+1;
+    end 
+    j=0;
+    
+    % Checks which objects are found in the appeared array and NOT the
+    % disappeared array and stores these object numbers. 
+    
+    for j = 1:size(truncatedDisappearedObjects)
+        for k = 1:size(truncatedAppearedObjects)
+            if truncatedDisappearedObjects(j,2) == truncatedAppearedObjects(k,2)
+                truncatedAppearedObjects = vertcat(truncatedAppearedObjects(1:k-1, :), truncatedAppearedObjects(k+1:size(truncatedAppearedObjects), :));  % If object is in both arrays, remove from the appeared objects array.
+                break;
+            end
+        end
+    end
+ 
+    
+    if size(truncatedAppearedObjects,1) ~= 1  % If the total number of objects on the screen doesn't equal 1, insert NaN into object array
+        objectsArray = horzcat (objectsArray, [NaN; NaN]);  % Add NaN to object array
+        isTargetArray = horzcat (isTargetArray, [NaN; NaN]);  % Add NaN to final output array
+        saccadesArray = horzcat (saccadesArray, [NaN; NaN]);
+    else  % Otherwise
+        y = mainStruct.objects(truncatedAppearedObjects(1,2)).tag;
+        objectsArray = horzcat (objectsArray, [truncatedAppearedObjects(1,2); truncatedAppearedObjects(1,1)]);  % Add this particular object to object array (object + time of appearance)
+
+        if (strcmp(y,'TargetObject'))  % Determine whether or not the object is a target and place it into the final array
+            target = 1;
+        else
+            target = 0;
+        end
+        isTargetArray = horzcat (isTargetArray, [target; truncatedAppearedObjects(1,1)]);  %  Add the object + time of appearance)
+
+        marker1 = 0;
+        marker2 = 0;
+        saccadeTime = -1;
+        for k = 1: size(mainStruct.eeg.object_events)  % Run for each event in event array
+            curTime = mainStruct.eeg.object_events(k,1)/samplingFactor;   % Get current time
+            if curTime == truncatedAppearedObjects(1,1)  % Determine which element in the original events array contains this object's appearance
+                marker1 = k;
+            end 
+            if curTime < buttonTime  % Determine which element in the array contains the button press.
+                marker2 = k;
+            else
+                break;
+            end
+        end
+        for k = marker1:marker2  % Go through the original event vector from the two elements determined above. When saccade is found, break accordingly.
+            if floor(mainStruct.eeg.object_events(k,2)/50) == 0  % Element being looked at is a saccade
+                saccadeTime = mainStruct.eeg.object_events(k,1)/samplingFactor;  % Store saccade's time
+                if initialTypeNum == 11  % If user wants to use the FIRST saccade, break this loop.
+                    break;
+                end
+            end
+        end
+        if saccadeTime == -1  % If saccade is not found, enter a NaN
+            saccadesArray = horzcat (saccadesArray, [NaN; NaN]);
+        else  % Otherwise enter the saccade time.
+            saccadesArray = horzcat (saccadesArray, [target; saccadeTime]);  %  Add the object + time of appearance)
+        end            
+        
+    end
+    
+end
+ 
+if initialTypeNum == 0  % Output the correct vector (either object appearance, or saccade appearance)
+    outputArray = isTargetArray;
+elseif initialTypeNum == 11 || initialTypeNum == 12 
+     outputArray = saccadesArray;
+end 
+ 
+% int32(isTargetArray);  % Extranneous print statements
+% int32(saccadesArray);
+% int32(saccadesArray - isTargetArray);
+ 
+ 
+ 
+
+

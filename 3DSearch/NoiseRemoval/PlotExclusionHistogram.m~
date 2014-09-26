@@ -1,0 +1,42 @@
+function PlotExclusionHistogram(data,t_samples,t_window)
+
+% PlotExclusionHistogram(data,t_samples,t_window)
+% 
+% -Plots a cumulative histogram of voltage thresholds vs. number of trials
+% affected.
+% -Takes the maximum voltage value attained by any electrode at any time
+% during the trial.  This is the "max" for that trial.
+% -If we were to exclude all trials that exceeded a certain voltage at any
+% electrode at any time during the trial, how many would be excluded?  We
+% plot the answer as a function of the "maximum voltage" we might choose.
+% -INPUT data should be an array of size [nElectrodes x nSamples x nTrials]
+% -INPUT t_samples should be a size-nSamples vector of time values relative
+% to the anchor (in ms, usually EEG.times).
+% -INPUT t_range should be a 1x2 vector [start_time, end_time] defining the
+% time (in ms) at which to look for high voltages.  If a time will not be 
+% relevant to our analysis, we should leave it outside the window here to 
+% avoid excluding too many trials.
+% 
+% Created 8/5/10 by DJ.
+
+% Handle inputs
+if nargin(
+
+%% Find maxes of each trial
+inWindow = (t_samples > t_window(1) & t_samples < t_window(2));
+maxes = max(max(data(:,inWindow,:),[],2),[],1);
+maxes = permute(maxes,[3,1,2]);
+nTrials = length(maxes);
+
+%% Make cumulative histogram of maxes
+[n_maxes t_maxes] = hist(maxes,0:250);
+n_maxes = fliplr(n_maxes);
+t_maxes = fliplr(t_maxes);
+c_maxes = cumsum(n_maxes);
+p_maxes = c_maxes/nTrials;
+
+%% Plot cumulative histogram of maxes
+plot(t_maxes,p_maxes);
+xlabel('Voltage cutoff (uV)');
+ylabel(sprintf('Fraction of %d trials excluded',nTrials));
+title(sprintf('Voltage cutoff exclusion histogram - event + [%d, %d]ms',t_window(1),t_window(2)));
