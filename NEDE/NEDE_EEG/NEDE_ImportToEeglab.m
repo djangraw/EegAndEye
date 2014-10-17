@@ -51,6 +51,7 @@ function NEDE_ImportToEeglab(prefix,subject,eegSession,eegFiletype,output_suffix
 % Updated 5/17/13 by DJ - added SquaresFix3 compatibility.
 % Updated 2/25/14 by DJ - switched to sensorium loc files that include PO5.
 % Updated 9/25/14 by DJ - switched name to NEDE_...
+% Updated 10/17/14 by DJ - fixed bug where biosemi events are offset by 16128.
 
 %% CHECK INPUTS AND SET UP
 
@@ -205,7 +206,12 @@ switch eegFiletype
     case 'Biosemi'
         % Import (EEGLAB does the work for us)
         EEG = pop_biosig(eeg_filename,'channels',channels,'ref',channels);
-        
+        % Adjust the numeric event data if necessary
+        types = [EEG.event.type];
+        if all(types>=16128) % addresses biosemi quirk where all events are offset by 16128 (dec2hex('3F00'))
+            newtypecell = num2cell(types-16128);            
+            [EEG.event.type] = deal(newtypecell{:});
+        end
     case {'Sensorium-2008' 'Sensorium-2011' 'Sensorium-2011-1000Hz' 'Sensorium-2011-50Hz'}
         % Get data
         eegdata = readEEG_b4preprocessing(eeg_filename,channels,nSamples,offset); % An's program for importing Sensorium files
