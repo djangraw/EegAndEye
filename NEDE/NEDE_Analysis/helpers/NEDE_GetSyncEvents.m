@@ -46,12 +46,18 @@ else
 end
 
 % Extract info from EEG struct
+latencies = [EEG.event.latency];
 if ischar(EEG.event(1).type)
-    boundaries = [0, find(strcmp('boundary',{EEG.event.type})), length(EEG.event)];
+%     boundaries = [0, find(strcmp('boundary',{EEG.event.type})), length(EEG.event)];
+    isBoundary = strcmp('boundary',{EEG.event.type});
+    boundlatency = [0, latencies(isBoundary), EEG.pnts];
     eventSess = zeros(length(EEG.event),1);
-    for i=1:numel(boundaries)-1
-        eventSess(boundaries(i)+1:boundaries(i+1)) = i;
-    end        
+%     for i=1:numel(boundaries)-1
+%         eventSess(boundaries(i)+1:boundaries(i+1)) = i;
+%     end  
+    for i=1:numel(boundlatency)-1
+        eventSess(latencies>=boundlatency(i) & latencies<boundlatency(i+1)) = i;
+    end  
     numtypes = cellfun(@str2num,{EEG.event.type},'UniformOutput',false);
     isnumtype = ~cellfun(@isempty,numtypes);
     eeg = [cat(1,EEG.event(isnumtype).latency), cat(1,numtypes{:}),eventSess(isnumtype)];

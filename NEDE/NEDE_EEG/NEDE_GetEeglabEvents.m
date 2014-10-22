@@ -1,9 +1,25 @@
-function [eyeTimes, eyeCodes] = NEDE_GetEeglabEvents(y,EEG)
+function [eyeTimes, eyeCodes] = NEDE_GetEeglabEvents(y,EEG,SYNC_CODES)
 
-% [eyeTimes, eyeCodes] = NEDE_GetEeglabEvents(y,EEG)
+% [eyeTimes, eyeCodes] = NEDE_GetEeglabEvents(y,EEG,SYNC_CODES)
+%
+% INPUTS:
+% - y is an n-element NEDE data struct array.
+% - EEG is an eeglab datastruct.
+% - SYNC_CODES is a vector.
+%
+% OUTPUTS:
+% - eyeTimes is an n-element cell vector in which eyeTimes{i} contains a
+% p(i)-element vector of times when events occurred in session i.
+% - eyeCodes is an n-element cell vector in which eyeCodes{i} contains a
+% p(i)-element vector of the names of the events in session i.
 %
 % Created 9/26/14 by DJ based on NEDE_AddEeglabEvents.m.
+% Updated 10/22/14 by DJ - added SYNC_CODES input, comments.
 
+% Declare defaults
+if nargin<3
+    SYNC_CODES = []; % use default in NEDE_GetSyncEvents
+end
 
 % Get sync events
 [eyeSyncs, eegSyncs] = NEDE_GetSyncEvents(y,EEG,SYNC_CODES);

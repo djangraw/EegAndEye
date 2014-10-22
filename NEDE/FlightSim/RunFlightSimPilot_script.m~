@@ -7,9 +7,9 @@
 
 % Declare parameters for this experiment/subject
 experiment = 'FlightSim_1pt0';
-subject = 1;
-sessions = 1:50; % NEDE sessions
-eegSessions = [1:7 16 26 36 46]; % BDF filenames
+subject = 3;
+sessions = 1:40; % NEDE sessions
+eegSessions = [1 11 21 31]; % BDF filenames
 
 
 % ------------------------ %
@@ -17,11 +17,14 @@ eegSessions = [1:7 16 26 36 46]; % BDF filenames
 % ------------------------ %
 
 %% Import behavior
+% Save behavior .mat files
 NEDE_ImportData(experiment,subject,sessions);
 
 %% Import Raw Pupil/Gaze Samples
+% Save eye position/pupil size samples
 cd samples
 GetEyeSamples(subject,sessions,experiment,0);
+cd ..
 
 %% Load behavior results
 % Load into a vector of NEDE structs
@@ -31,8 +34,8 @@ for i=1:numel(sessions);
     y(i) = x;
 end
 
-% Make combo struct with all trials appended but only copy of 1 params/objects fields
-eventsstruct = AppendStructs(y.events,1); % only events field will be different across files
+% Make combo struct with all trials appended but only 1 copy of params/objects fields
+eventsstruct = AppendStructs({y.events},1); % only events field will be different across files
 combostruct = y(1); % keep only 1 copy of other fields
 combostruct.events = eventsstruct;
 
@@ -73,6 +76,10 @@ end
 % Combine EEG data and save result
 CombineEeglabSessions(subject,eegSessions,'-filtered','-all-filtered',experiment);
 
+%% Reject bad sessions
+
+EEG = pop_loadset(sprintf('%s-%d-all-filtered.set',experiment,subject));
+EEG = NEDE_RejectSession(
 %% Load combined file
 % load the file we just saved
 EEG = pop_loadset(sprintf('%s-%d-all-filtered.set',experiment,subject));

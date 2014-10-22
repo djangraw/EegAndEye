@@ -4,13 +4,20 @@
 % project pilot data.
 %
 % Created 9/23/14 by DJ.
+% Updated 10/22/14 by DJ - added reject-session section.
 
 % Declare parameters for this experiment/subject
 experiment = 'FlightSim_1pt0';
-subject = 1;
-sessions = 1:50; % NEDE sessions
-eegSessions = [1:7 16 26 36 46]; % BDF filenames
-
+subject = 2;
+switch subject
+    case {2,3}
+        sessions = 1:40; % NEDE sessions
+        eegSessions = [1 11 21 31]; % BDF filenames
+    otherwise
+        disp('Please enter this subject''s sessions into the script.')
+        sessions = [];
+        eegSessions = [];
+end
 
 % ------------------------ %
 % ----- BEHAVIOR DATA ---- %
@@ -33,9 +40,10 @@ for i=1:numel(sessions);
     load(sprintf('%s-%d-%d',experiment,subject,sessions(i)));
     y(i) = x;
 end
+save(sprintf('%s-%d-all',experiment,subject),'y');
 
 % Make combo struct with all trials appended but only 1 copy of params/objects fields
-eventsstruct = AppendStructs(y.events,1); % only events field will be different across files
+eventsstruct = AppendStructs({y.events},1); % only events field will be different across files
 combostruct = y(1); % keep only 1 copy of other fields
 combostruct.events = eventsstruct;
 
@@ -76,6 +84,32 @@ end
 % Combine EEG data and save result
 CombineEeglabSessions(subject,eegSessions,'-filtered','-all-filtered',experiment);
 
+%% Reject bad sessions
+switch subject
+    case 2
+        badSessions = [18 21 37];
+    case 3
+        badSessions = [2 7 9 11];
+    otherwise
+        badSessions = [];
+end
+% check whether bad sessions have already been deleted
+load(sprintf('%s-%d-all',experiment,subject));
+if numel(y)<numel(sessions)
+    disp('Some sessions have already been deleted! Not deleting any more.')
+else
+    % remove from behavior struct array
+    fprintf('Deleting %d sessions from behavior...\n',numel(badSessions));
+    y(badSessions) = [];
+    save(sprintf('%s-%d-all',experiment,subject),'y');
+    % remove from EEG struct
+    fprintf('Deleting %d sessions from EEG...\n',numel(badSessions));
+    EEG = pop_loadset(sprintf('%s-%d-all-filtered.set',experiment,subject));
+    EEG = NEDE_RejectSession(EEG, badSessions);
+    EEG = pop_saveset(EEG,'filename',sprintf('%s-%d-all-filtered.set',experiment,subject));
+end
+disp('Done!')
+
 %% Load combined file
 % load the file we just saved
 EEG = pop_loadset(sprintf('%s-%d-all-filtered.set',experiment,subject));
@@ -87,7 +121,7 @@ SYNC_CODES = [211, 208]; % include 208 for subj 1 (last 2 bits of event codes lo
 % Check how well codes synched up
 NEDE_CheckSync(y,EEG,SYNC_CODES);
 % Import standard NEDE events like saccades, blinks, etc.
-[eyeTimes, eyeCodes] = NEDE_GetEeglabEvents(y,EEG);
+[eyeTimes, eyeCodes] = NEDE_GetEeglabEvents(y,EEG,SYNC_CODES);
 EEG = NEDE_AddEeglabEvents(y,EEG,eyeTimes,eyeCodes,SYNC_CODES);
 % Save dataset with events
 pop_saveset(EEG,'filename',newEegFilename); 

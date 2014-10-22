@@ -24,6 +24,7 @@ function delay = NEDE_CheckSync(x,EEG,SYNC_CODES)
 % Updated 12/6/13 by DJ - added delay output, cleaned up.
 % Updated 2/11/14 by DJ - added multi-session support
 % Updated 9/25/14 by DJ - added SYNC_CODES input
+% Updated 10/22/14 by DJ - turned event check back on
 
 if ~exist('SYNC_CODES','var')
     SYNC_CODES = [];
@@ -32,7 +33,7 @@ end
 [eye,eeg] = NEDE_GetSyncEvents(x,EEG,SYNC_CODES);
 
 % Make sure events are the same
-if 0%~isequal(eeg(:,2),eye(:,2)) || ~isequal(eeg(:,3),eye(:,3)) % number of events that aren't in exactly the right spot
+if ~isequal(eeg(:,2),eye(:,2)) || ~isequal(eeg(:,3),eye(:,3)) % number of events that aren't in exactly the right spot
     error('Sync events don''t match up!');
 else
     disp('All event types match. Checking timing...')

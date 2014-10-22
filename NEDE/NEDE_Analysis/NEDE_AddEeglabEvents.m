@@ -34,6 +34,8 @@ function [EEG, times, codes, iRemoved] = NEDE_AddEeglabEvents(y,EEG,eyeTimes,eye
 %   spelling, made temporary kluge fix for FlightSim_1pt0-1
 % Updated 9/26/14 by DJ - made general purpose by separating out
 %   NEDE_GetEeglabEvents.
+% Updated 10/22/14 by DJ - Write events to temporary text file (for new
+%   version of EEGLAB).
 
 
 %% CHECK INPUTS AND SET UP
@@ -99,9 +101,19 @@ codes = codes(order);
 %% Get events matrix and import into EEGLAB struct
 if ~isempty(eyeCodes) % only actually import events if codes are specified.
     events = [num2cell(times), codes]; % the times (in s) and codes of each event
-    assignin('base','events',events); % eeglab's importevent function grabs variable from base workspace
-    EEG = pop_importevent( EEG, 'append','yes','event','events','fields',{'latency' 'type'},'timeunit',1,'optimalign','off');
-    EEG = eeg_checkset( EEG );
+    % Write events to text file before import (for new version of eeglab)
+    events_filename = 'TEMP_Events.txt';
+    fileID = fopen(events_filename,'w');
+    for i=1:size(events,1);
+        fprintf(fileID,'%g %s\n',events{i,:});
+    end
+    fclose(fileID);
+    EEG = pop_importevent( EEG, 'append','yes','event',events_filename,'fields',{'latency' 'type'},'timeunit',1,'optimalign','off');
+    delete(events_filename); % remove temporary file
+    % Send events to base workspace (for old version of eeglab)
+%     assignin('base','events',events); % eeglab's importevent function grabs variable from base workspace
+%     EEG = pop_importevent( EEG, 'append','yes','event','events','fields',{'latency' 'type'},'timeunit',1,'optimalign','off');
+%     EEG = eeg_checkset( EEG );
 end
 
 toc

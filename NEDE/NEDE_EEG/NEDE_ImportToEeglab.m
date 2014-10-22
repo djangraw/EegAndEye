@@ -52,6 +52,7 @@ function NEDE_ImportToEeglab(prefix,subject,eegSession,eegFiletype,output_suffix
 % Updated 2/25/14 by DJ - switched to sensorium loc files that include PO5.
 % Updated 9/25/14 by DJ - switched name to NEDE_...
 % Updated 10/17/14 by DJ - fixed bug where biosemi events are offset by 16128.
+% Updated 10/22/14 by DJ - used NEDE_ExtractBiosemiEvents
 
 %% CHECK INPUTS AND SET UP
 
@@ -84,7 +85,8 @@ end
 % Directories
 data_dir = [cd '/'];
 % data_dir = '/Users/dave/Documents/Data/3DSearch/';
-electrodeloc_dir = '/Users/dave/Documents/Tools/eeglab/locationfiles/';
+% electrodeloc_dir = '/Users/dave/Documents/Tools/eeglab/locationfiles/'; % on Tesla machine
+electrodeloc_dir = '/Users/jangrawdc/Documents/MATLAB/LIINC/locationfiles/'; % on DJ's NIH machine
 
 % Filenames
 filename_base = sprintf('%s-%d-%d',prefix,subject,eegSession);
@@ -206,12 +208,13 @@ switch eegFiletype
     case 'Biosemi'
         % Import (EEGLAB does the work for us)
         EEG = pop_biosig(eeg_filename,'channels',channels,'ref',channels);
-        % Adjust the numeric event data if necessary
-        types = [EEG.event.type];
-        if all(types>=16128) % addresses biosemi quirk where all events are offset by 16128 (dec2hex('3F00'))
-            newtypecell = num2cell(types-16128);            
-            [EEG.event.type] = deal(newtypecell{:});
-        end
+        % write events to temporary file for reading into EEGLAB
+        events_filename = 'TEMP_events.txt';
+        events = NEDE_ExtractBiosemiEvents(eeg_filename,events_filename);
+        % import events to eeglab
+        EEG = pop_importevent( EEG, 'append','no','event',events_filename,'fields',{'latency' 'type'},'timeunit',1/EEG.srate,'optimalign','off');
+        delete(events_filename); % remove temporary file
+
     case {'Sensorium-2008' 'Sensorium-2011' 'Sensorium-2011-1000Hz' 'Sensorium-2011-50Hz'}
         % Get data
         eegdata = readEEG_b4preprocessing(eeg_filename,channels,nSamples,offset); % An's program for importing Sensorium files
