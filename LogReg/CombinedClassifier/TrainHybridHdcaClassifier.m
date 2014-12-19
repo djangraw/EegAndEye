@@ -91,12 +91,12 @@ for jFold = 1:cv_fold.numFolds
         testingData = permute(reshape(innerTestingData(:,isInWin,:),size(innerTestingData,1),length(isInWin)*size(innerTestingData,3)), [2 1]);    
         trainingTruth = permute(reshape(innerTrainingTruth(:,isInWin,:),size(innerTrainingTruth,1),length(isInWin)*size(innerTrainingTruth,3)), [2 1]);
         % Find spatial weights using FLD
-        try
+%         try
             [~,~,~,~,coeff] = classify(testingData,trainingData,trainingTruth);
-        catch
-            warning('classify errored... trying diaglinear option.')
-            [~,~,~,~,coeff] = classify(testingData,trainingData,trainingTruth,'diaglinear');
-        end
+%         catch
+%             warning('classify errored... trying diaglinear option.')
+%             [~,~,~,~,coeff] = classify(testingData,trainingData,trainingTruth,'diaglinear');
+%         end
         wFold(:,iWin,jFold) = coeff(2).linear;
 %             w(:,iWin,foldNum,jFold) = coeff(2).linear;
         % Get 'evaluation' y values

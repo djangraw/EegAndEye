@@ -8,8 +8,11 @@
 
 % Declare parameters for this experiment/subject
 experiment = 'FlightSim_1pt0';
-subject = 2;
+subject = 3;
 switch subject
+    case 1
+        sessions = 1:50;
+        eegSessions = [1:7 16 26 36 46];
     case {2,3}
         sessions = 1:40; % NEDE sessions
         eegSessions = [1 11 21 31]; % BDF filenames

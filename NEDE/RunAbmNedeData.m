@@ -7,7 +7,9 @@ eegPrefix = 'NEDE';
 rawFilename = 'Raw_Data.csv';
 tpFilename = 'TP_Data.csv';
 
-basedir = '/Users/dave/Documents/Data/NEDE/ABM_Pilots';
+% basedir = '/Users/dave/Documents/Data/NEDE/ABM_Pilots'; % Tesla
+basedir = '/Users/jangrawdc/Documents/LiincData/NEDE/ABM_Pilots'; % Dave's NIH machine
+set(0,'DefaultFigureColormap',feval('jet')); % override MATLAB2014b's default
 
 %%
 cd(basedir)
@@ -89,6 +91,7 @@ EEG = pop_saveset(EEG,'filename',new_filename);
 %% Remove HEOG and Blink Components
 % Add artifact event markers
 EEG = pop_loadset(new_filename);
+EEG = pop_reref(EEG,[]); % NEW 11/7!!! RE-REFERENCE TO AVG.
 EEG = NEDE_AddHeogEvents(EEG,y);
 % Remove components
 blinktypes = {'Blink Start','Blink End'};
@@ -99,7 +102,7 @@ heogComp = GetHeogComponent(EEG,offset_ms,heogtypes);
 % Subtract out components
 EEG.data = SubtractOutComponents(EEG.data,[blinkComp,heogComp]);
 
-% Plot results
+%% Plot results
 figure;
 subplot(1,2,1);
 topoplot(double(blinkComp),EEG.chanlocs);
@@ -109,27 +112,67 @@ topoplot(double(heogComp),EEG.chanlocs);
 title('HEOG compoenent');
 MakeFigureTitle(new_filename);
 
+%% Run ICA and save
+EEG = pop_runica(EEG, 'icatype','runica','dataset',1,'options',{'extended' 1});
+EEG = pop_saveset( EEG, 'filename',[EEG.filename(1:end-4) '-reref-ica.set'],'filepath',EEG.filepath);
+
+%% Check ICs
+ica_filename = sprintf('%s-%d-all-events-reref-ica.set',ascPrefix,subject);
+EEG = pop_loadset(ica_filename);
+nComps = size(EEG.icaweights,1);
+pop_topoplot(EEG,0, 1:nComps ,EEG.setname,0 ,0,'electrodes','on'); % plot scalp maps
+pop_eegplot( EEG, 0, 1, 1); % plot component activations
+figure; pop_spectopo(EEG, 0, [0  EEG.pnts], 'EEG' , 'freq', [10], 'plotchan', 0, 'percent', 20, 'icacomps', 1:nComps, 'nicamaps', 5, 'freqrange',[2 25],'electrodes','off'); % plot spectra
+
+%% Remove bad ICs
+BadICs = 8:9;
+EEG = pop_subcomp( EEG, BadICs, 0);
+BadIcString = sprintf('%d-',BadICs);
+BadIcString(end) = [];
+EEG.setname= sprintf('%s ICs_%s_Removed',EEG.setname, BadIcString);
+EEG = eeg_checkset( EEG );
+% EEG.icaact = (EEG.icaweights*EEG.icasphere)*EEG.data(EEG.icachansind,:);
 
 %% Epoch data
 EEGtarg = pop_epoch(EEG,{'Targ Saccade'},[-1 2]);
-EEGtarg = pop_rmbase(EEGtarg,[0 0.1]); % remove post-saccade baseline
+% EEGtarg = pop_rmbase(EEGtarg,[0 100]); % remove post-saccade baseline
 EEGdist = pop_epoch(EEG,{'Dist Saccade'},[-1 2]);
-EEGdist = pop_rmbase(EEGdist,[0 0.1]); % remove post-saccade baseline
+% EEGdist = pop_rmbase(EEGdist,[0 100]); % remove post-saccade baseline
+
+nComps = size(EEG.icaweights,1);
+EEGtarg.icaact = nan(nComps, EEGtarg.pnts, EEGtarg.trials);
+for i=1:EEGtarg.trials
+    EEGtarg.icaact(:,:,i) = (EEG.icaweights*EEG.icasphere)*EEGtarg.data(EEG.icachansind,:,i);
+end
+
+EEGdist.icaact = nan(nComps, EEGdist.pnts, EEGdist.trials);
+for i=1:EEGdist.trials
+    EEGdist.icaact(:,:,i) = (EEG.icaweights*EEG.icasphere)*EEGdist.data(EEG.icachansind,:,i);
+end
 
 %% Train classifier
 twl_ms = 100; % in ms
 two_ms = 100:100:900; % in ms
 two = round(interp1(EEGtarg.times, 1:EEGtarg.pnts, two_ms));% indices
 twl = round(twl_ms/1000*EEGtarg.srate);
-%%
-data = cat(3,EEGtarg.data,EEGdist.data);
+%% Set up data
+% data = cat(3,EEGtarg.data,EEGdist.data);
+data = cat(3,EEGtarg.icaact(1:7,:,:),EEGdist.icaact(1:7,:,:));
+fmdata = cat(3,EEGtarg.data,EEGdist.data);
 truth = [ones(1,EEGtarg.trials), zeros(1,EEGdist.trials)];
-[y_level2, w, v, fwdModel, y_level1] = TrainHybridHdcaClassifier(data,truth,twl,two);
 
+
+%% Run HDCA classifier
+% [y_level2, w, v, fwdModel, y_level1] = TrainHybridHdcaClassifier(data,truth,twl,two,[],fmdata,'nocrossval');
+[y_level2, w, v, fwdModel, y_level1] = RunHybridHdcaClassifier(data,truth,twl,two,'10fold',[],fmdata);
+%% Run Old RSVP Classifier
+useica = true;
+[y_level2, w, v, fwdModel] = run_rsvp_classifier([EEGdist EEGtarg],twl,two,'20fold',true);
+% [y_level2, w, v, fwdModel] = run_rsvp_classifier([EEGdist EEGtarg],twl,two,'loo',useica);
 %% Plot classifier results
 
-PlotHybridHdcaClassifier(fwdModel, v, EEG.chanlocs, two_ms);
-figure;
+PlotHybridHdcaClassifier(fwdModel, v, EEG.chanlocs, two_ms+twl_ms/2);
+
 %%
 clf;
 Az_level1 = zeros(1,length(two));
