@@ -1,7 +1,7 @@
-% pop_iirfilt() - interactively filter EEG dataset data using iirfilt()
+% pop_iirfilt_returnfilter() - interactively filter EEG dataset data using iirfilt()
 %
 % Usage:
-%   >> EEGOUT = pop_iirfilt( EEG, locutoff, hicutoff, trans_bw);
+%   >> [EEGOUT, com, b, a] = pop_iirfilt_returnfilter( EEG, locutoff, hicutoff, trans_bw);
 %
 % Graphical interface:
 %   "Lower edge ..." - [edit box] Lower edge of the frequency pass band (Hz) 
@@ -26,6 +26,8 @@
 %
 % Outputs:
 %   EEGOUT   - output dataset
+%   com      - command (string)
+%   [b,a]    - filter parameters
 %
 % Authors: Maksym Pozdin (mpozdin.ece04@gtalumni.org, IOL/ONRC,2004), 
 %          with Arnaud Delorme and Scott Makeig (SCCN/INC/UCSD, La Jolla CA)
@@ -132,13 +134,15 @@
 % Revision 1.1  2002/04/05 17:32:13  jorn
 % Initial revision
 %
-
 % 01-25-02 reformated help & license -ad 
 % Updated 2/26/14 by DJ - added filter outputs b,a
+% Updated 1/9/15 by DJ - updated header comments
 
 function [EEG, com, b, a] = pop_iirfilt_returnfilter( EEG, locutoff, hicutoff, trans_bw, revfilt);
 
 com = '';
+b = [];
+a = [];
 if nargin < 1
 	help pop_iirfilt;
 	return;

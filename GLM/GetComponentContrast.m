@@ -1,11 +1,12 @@
-function GetComponentContrast(rules,experiments,old_suffix,suffix_in,suffix_out,iEvents,lambda_best,betas,components)
+function GetComponentContrast(rules,experiments,old_suffix,suffix_in,suffix_out,iEvents_cell,lambda_best,betas,components)
 
-% GetComponentContrast(rules,experiments,old_suffix,suffix_in,suffix_out,iEvents,lambda_best,betas,components)
+% GetComponentContrast(rules,experiments,old_suffix,suffix_in,suffix_out,iEvents_cell,lambda_best,betas,components)
 %
 % INPUTS:
 % -components is an ExD matrix.
 %
 % Created 9/19/14 by DJ.
+% Updated 1/15/15 by DJ -changed to iEvents_cell
 
 
 if ~exist('components','var') || isempty(components)
@@ -23,7 +24,7 @@ for iRule = 1:numel(rules)
         fprintf('=== %s %s, %s: Setting up...\n',datestr(now,16),rule,experiment);
         % set up contrast
         R = load(sprintf('%s-%d-%s',experiment,subjects(1),old_suffix));
-%         iEvents = iEvents_cell{iExp};
+        iEvents = iEvents_cell{iExp};
         
         p = length(R.tResponse{end})*numel(iEvents);
         event_list = R.regressor_events{end}(iEvents);

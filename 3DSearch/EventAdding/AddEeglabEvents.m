@@ -34,6 +34,8 @@ function EEG = AddEeglabEvents(subject,session,input_suffix,events_rule,threshol
 % Updated 10/31/11 by DJ - separated input/output suffixes.
 % Updated 2/28/13 by DJ - added SquaresFix compatibility.
 % Updated 3/17/13 by DJ - added SquaresFix3 compatibility.
+% Updated 2/19/15 by DJ - new version of eeglab wants array, not name of
+% array in global workspace, as input to pop_importevent().
 
 %% CHECK INPUTS AND SET UP
 if nargin<3 || strcmp(input_suffix,'')
@@ -91,8 +93,10 @@ load(sprintf('%s-%d-%d',prefix,subject,session)); % load trial structure x
 
 %% Get events matrix and import into EEGLAB
 events = MakeEventsMatrix(x,events_rule,threshold); % the times (in s) and codes of each event
-assignin('base','events',events); % eeglab's importevent function grabs variable from base workspace
-EEG = pop_importevent( EEG, 'append','no','event','events','fields',{'latency' 'type'},'timeunit',1,'optimalign','off');
+% assignin('base','events',events); % eeglab's importevent function grabs variable from base workspace
+% EEG = pop_importevent( EEG, 'append','no','event','events','fields',{'latency' 'type'},'timeunit',1,'optimalign','off');
+EEG = pop_importevent( EEG, 'append','no','event',events,'fields',{'latency' 'type'},'timeunit',1,'optimalign','off');
+
 [ALLEEG EEG] = eeg_store(ALLEEG, EEG, CURRENTSET);
 EEG = eeg_checkset( EEG );
 

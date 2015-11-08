@@ -34,7 +34,7 @@ set(gcf,'NumberTitle','off','Name',title)
 % Plot text on the figure itself
 if plotOnAxes % if desired
     axes('Position', [.5 .98 .02 .02], 'Visible', 'off') % make new, invisible axes
-    h = text(0,0,show_symbols(title),'horizontalalignment','center',... 
+    h = text(0,0,title,'interpreter','none','horizontalalignment','center',... 
         'fontweight','bold'); % plot text in bold
 else 
     h=[]; % if the figure text is not desired, provide empty output

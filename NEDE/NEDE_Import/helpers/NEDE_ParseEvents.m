@@ -50,6 +50,7 @@ function datastruct = NEDE_ParseEvents(text_file,types,start_code,end_code)
 % Updated 2/10/14 by DJ - updated fixupdate option, types default
 % Updated 2/19/14 by DJ - fixed end trial bug
 % Updated 9/10/14 by DJ - added START option.
+% Updated 4/9/15 by DJ - added eye outputs (for binocular recording)
 
 if nargin<2 || isempty(types)
     types = {'saccade','fixation','blink','fixupdate','button','trial','port','leader','camera','visible'};%,'message'};
@@ -80,8 +81,8 @@ for i=1:numel(types)
     switch types{i}
         case 'blink'
             words{i} = 'EBLINK'; 
-            formats{i} = 'EBLINK %*s %d %d'; % Message format: EBLINK <eye (R/L)> <blinkstart> <blinkend>
-            values{i} = zeros(0,2);
+            formats{i} = 'EBLINK %c %d %d'; % Message format: 13.4547 	EXP 	Set tone sound=f
+            values{i} = zeros(0,3);
         case 'button'
             words{i} = 'BUTTON';
             formats{i} = 'BUTTON %d %d %d'; % Message format: BUTTON <time> <button #> <state>
@@ -92,12 +93,12 @@ for i=1:numel(types)
             values{i} = zeros(0,3);
         case 'fixation'
             words{i} = 'EFIX';
-            formats{i} = 'EFIX %*s %d %d %*d %f %f %*f'; % Message format: EFIX <eye> <starttime> <endtime> <duration> <avgxpos> <avgypos> <avgpupilsize>
-            values{i} = zeros(0,4);
+            formats{i} = 'EFIX %c %d %d %*d %f %f %*f'; % Message format: EFIX <eye> <starttime> <endtime> <duration> <avgxpos> <avgypos> <avgpupilsize>
+            values{i} = zeros(0,5);
         case 'saccade'
             words{i} = 'ESACC';
-            formats{i} = 'ESACC %*s %d %d %*d %f %f %f %f'; % Message format: ESACC <eye> <starttime> <endtime> <duration> <startx> <starty> <endx> <endy> <amp> <peakvelocity>    
-            values{i} = zeros(0,6);
+            formats{i} = 'ESACC %c %d %d %*d %f %f %f %f'; % Message format: ESACC <eye> <starttime> <endtime> <duration> <startx> <starty> <endx> <endy> <amp> <peakvelocity>    
+            values{i} = zeros(0,7);
         case 'port'
             words{i} = 'write_ioport';
             formats{i} = 'MSG %d !CMD %*d write_ioport 0x378 %d'; % Message format: MSG <time> !CMD <delay???> write_ioport 0x378 <msgnumber>
@@ -202,8 +203,9 @@ for i=1:numel(types)
     % Rearrange the values into the desired output
     switch types{i}
         case 'blink'
-            datastruct.blink.time_start = values{i}(:,1); % first output is times at which a blink started
-            datastruct.blink.time_end = values{i}(:,2); % second output is times at which a blink ended
+            datastruct.blink.eye = char(values{i}(:,1));
+            datastruct.blink.time_start = values{i}(:,2); % first output is times at which a blink started
+            datastruct.blink.time_end = values{i}(:,3); % second output is times at which a blink ended
         case 'button'
             datastruct.button.time = values{i}(values{i}(:,3) == 1,1); % first output is times at which any button was pressed
             datastruct.button.number = values{i}(values{i}(:,3) == 1,2); % second output is number of the button was pressed
@@ -211,14 +213,16 @@ for i=1:numel(types)
             datastruct.eyesample.position = values{i}(:,1:2); % first output is the x and y position of the eye
             datastruct.eyesample.pupilsize = values{i}(:,3); % second output is the pupil size
         case 'fixation'
-            datastruct.fixation.time_start = values{i}(:,1); % first output is timestamp of start and end of fixation
-            datastruct.fixation.time_end = values{i}(:,2); % first output is timestamp of start and end of fixation
-            datastruct.fixation.position = values{i}(:,3:4); % second output is avg. x and y position of eye during fixation
+            datastruct.fixation.eye = char(values{i}(:,1));
+            datastruct.fixation.time_start = values{i}(:,2); % first output is timestamp of start and end of fixation
+            datastruct.fixation.time_end = values{i}(:,3); % first output is timestamp of start and end of fixation
+            datastruct.fixation.position = values{i}(:,4:5); % second output is avg. x and y position of eye during fixation
         case 'saccade'
-            datastruct.saccade.time_end = values{i}(:,2); % first output is timestamp of end of saccade
-            datastruct.saccade.position_end = values{i}(:,5:6); % second output is x and y position of eye at end of saccade
-            datastruct.saccade.time_start = values{i}(:,1); % third output is timestamp of start of saccade
-            datastruct.saccade.position_start = values{i}(:,3:4); % fourth output is x and y position of eye at start of saccade
+            datastruct.saccade.eye = char(values{i}(:,1));
+            datastruct.saccade.time_end = values{i}(:,3); % first output is timestamp of end of saccade
+            datastruct.saccade.position_end = values{i}(:,6:7); % second output is x and y position of eye at end of saccade
+            datastruct.saccade.time_start = values{i}(:,2); % third output is timestamp of start of saccade
+            datastruct.saccade.position_start = values{i}(:,4:5); % fourth output is x and y position of eye at start of saccade
         case 'port'
             datastruct.port.time = values{i}(:,1); % 1st output is timestamp sent
             datastruct.port.number = values{i}(:,2); % 2nd output is message sent

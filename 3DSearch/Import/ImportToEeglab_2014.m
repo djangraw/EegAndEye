@@ -52,6 +52,7 @@ function ImportToEeglab_2014(subject,ascSession,eegSession,eegFiletype,experimen
 % Updated 5/17/13 by DJ - added SquaresFix3 compatibility.
 % Updated 2/25/14 by DJ - switched to sensorium loc files that include PO5.
 % Updated 2/26/14 by DJ - switched to iir filters
+% Updated 2/19/15 by DJ - updated electrodeloc_dir for NIH computer
 
 %% CHECK INPUTS AND SET UP
 if nargin<5
@@ -86,7 +87,8 @@ end
 % Directories
 data_dir = [cd '/'];
 % data_dir = '/Users/dave/Documents/Data/3DSearch/';
-electrodeloc_dir = '/Users/dave/Documents/Tools/eeglab/locationfiles/';
+% electrodeloc_dir = '/Users/dave/Documents/Tools/eeglab/locationfiles/';
+electrodeloc_dir = '/Users/jangrawdc/Documents/MATLAB/LIINC/locationfiles/';
 
 % Filenames
 switch experimentType

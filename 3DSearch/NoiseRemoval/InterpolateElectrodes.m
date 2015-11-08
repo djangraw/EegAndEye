@@ -19,7 +19,7 @@ function [ALLEEG, EEG, CURRENTSET] = InterpolateElectrodes(input_filename, outpu
 %
 % Created 8/8/12 by DJ based on RemoveElectrodes.m.
 % Updated 3/18/13 by DJ - automatically adds '.set' if it's not in filename
-
+% Updated 2/19/15 by DJ - switch to EEGLAB's spherical interpolation
 
 %% Create inputs and set up
 % Check filename
@@ -38,9 +38,20 @@ ALLEEG = [];
 EEG = pop_loadset('filename',input_filename,'filepath',data_dir);
 [ALLEEG, EEG, CURRENTSET] = eeg_store( ALLEEG, EEG, 0 );
 
+%% Get channel numbers (added 2/19/15)
+% Convert input to vector of channel indices
+if isstruct(chanList)
+    [~, chanNumVec] = ismember({chanList.labels},{EEG.chanlocs.labels});
+elseif iscell(chanList)
+    [~, chanNumVec] = ismember(chanList,{EEG.chanlocs.labels});
+elseif isnumeric(chanList)
+    chanNumVec = chanList;
+end
+
 %% Remove channels
 % disp('Removing channels...')
-EEG = InterpChan(EEG,chanList); % remove electrodes
+% EEG = InterpChan(EEG,chanList); % remove electrodes
+EEG = eeg_interp(EEG,chanNumVec); % use EEGLAB function with spherical interpolation
 EEG = pop_editset(EEG, 'setname', sprintf('%s - %dChansInterpolated',EEG.setname,numel(chanList))); % rename dataset
 [ALLEEG EEG CURRENTSET] = pop_newset(ALLEEG, EEG, 0,'gui','off'); 
 

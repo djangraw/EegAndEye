@@ -44,6 +44,7 @@ function [elTimes, codes, elWeights, iEvents] = UseEventRule(y,rule)
 % Updated 3/11/14 by DJ - added pT_{0/2}-style labels, column vec check
 % Updated 7/30/14 by DJ - allow rules starting with pT_{0/2}-style labels
 %  and including ramps 
+% Updated 1/28/15 by DJ - allow rules like p_D{x/3}
 
 % Set up
 nSessions = numel(y);
@@ -62,19 +63,31 @@ for i=1:nSessions
     
     % analysis 3pt0 options
     if ~isempty(strfind(rule,'/3}')) % SquaresFix3
-        [type,sqNum] = GetSquareTypes(y(i),'sf3',1);        
-        iEvents{i} = find(strncmp(rule,type,find(rule=='}')));
+        [type,sqNum] = GetSquareTypes(y(i),'sf3',1); 
+        if ~isempty(strfind(rule,'{x/'))
+            iEvents{i} = find(strncmp(rule,type,2)); % pD or pT
+        else
+            iEvents{i} = find(strncmp(rule,type,find(rule=='}')));
+        end
         elTimes{i} = y(i).trial.square_time(iEvents{i});
         
     elseif ~isempty(strfind(rule,'/2}')) && rule(1)=='p'  % SquaresFix
         [type,sqNum] = GetSquareTypes(y(i),'sf',1);        
-        iEvents{i} = find(strncmp(rule,type,find(rule=='}')));
+        if ~isempty(strfind(rule,'{x/'))
+            iEvents{i} = find(strncmp(rule,type,2)); % pD or pT
+        else
+            iEvents{i} = find(strncmp(rule,type,find(rule=='}')));
+        end
         elTimes{i} = y(i).trial.square_time(iEvents{i});
     
     elseif ~isempty(strfind(rule,'/2}')) && rule(1)=='a'  % Squares
         [type,sqNum] = GetSquareTypes(y(i),'sq',1); 
         % get index of 1st saccade to each relevant square
-        [rows, cols] = find(strncmp(rule,type,find(rule=='}')));
+        if ~isempty(strfind(rule,'{x/'))
+            [rows, cols] = find(strncmp(rule,type,2)); % aD or aT
+        else
+            [rows, cols] = find(strncmp(rule,type,find(rule=='}')));
+        end
         iEvents{i} = nan(1,length(rows));
         for j=1:length(rows) 
             % get first saccade to this trialnum, squarenum combo

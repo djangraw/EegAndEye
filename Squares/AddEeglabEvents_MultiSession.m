@@ -22,6 +22,8 @@ function [EEG, times, codes, iRemoved] = AddEeglabEvents_MultiSession(EEG, y, el
 % Updated 5/9/12 by DJ - added times/codes outputs, default for elCodes
 % Updated 4/23/13 by DJ - added iRemoved output to avoid removing events
 % with eeg_checkset
+% Updated 1/27/15 by DJ - new version of eeglab wants array, not name of
+% array in global workspace, as input to pop_importevent().
 
 %% Set up
 if nargin<4
@@ -64,7 +66,7 @@ end
 %% Get events matrix and import into EEGLAB struct
 if ~isempty(elCodes) % only actually import events if codes are specified.
     events = [num2cell(times), codes]; % the times (in s) and codes of each event
-    assignin('base','events',events); % eeglab's importevent function grabs variable from base workspace
-    EEG = pop_importevent( EEG, 'append','yes','event','events','fields',{'latency' 'type'},'timeunit',1,'optimalign','off');
+%     assignin('base','events',events); % eeglab's importevent function grabs variable from base workspace
+    EEG = pop_importevent( EEG, 'append','yes','event',events,'fields',{'latency' 'type'},'timeunit',1,'optimalign','off');
     EEG = eeg_checkset( EEG );
 end

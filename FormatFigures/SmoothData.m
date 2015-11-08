@@ -19,7 +19,7 @@ function data_out = SmoothData(data,sigma,halforfull)
 % Updated 9/19/13 by DJ - interpolate, normalize, comments
 % Updated 1/28/14 by DJ - fixed nan bug
 % Updated 4/23/14 by DJ - added halforfull input
-
+% Updated 3/30/15 by DJ - round sigma*7 to allow non-integer input
 if nargin<2 || isempty(sigma)
     sigma = 1;
 % 	sigma=numel(data)/10;    
@@ -51,8 +51,8 @@ data(nan_indices) = interp1(num_indices,data(num_indices),nan_indices);
 % Create narrow Gaussian kernel for smoothing the data
 switch halforfull
     case 'half'
-        dist = (0:(sigma*7))';
-        gaus = [zeros(sigma*7,1); 1/(sigma*sqrt(2*pi))*exp(-((dist.^2)/(2*sigma^2)))]';
+        dist = (0:round(sigma*7))';
+        gaus = [zeros(round(sigma*7),1); 1/(sigma*sqrt(2*pi))*exp(-((dist.^2)/(2*sigma^2)))]';
     case 'full'
         dist = (-round(sigma*7):round(sigma*7))';
         gaus = [1/(sigma*sqrt(2*pi))*exp(-((dist.^2)/(2*sigma^2)))]';

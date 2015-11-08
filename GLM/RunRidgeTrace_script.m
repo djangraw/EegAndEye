@@ -7,34 +7,44 @@ lambdas = 0:0.04:1;
 nFolds = 10;
 params = struct('demeanX',0,'demeanY',0,'normailzeX',1,'normalizeY',1);
 
-experiments = {'sq','sf','sf3'};
+% experiments = {'sq','sf','sf3'};
+experiments = {'sf'};
 
-% suffix_in = 'Type-v3pt6-RampUp-Matrices';
-% suffix_out = 'Type-v3pt6-RampUp';
+% suffixes_in = {'Square-v3pt6-Matrices', 'Type-v3pt6-Matrices', 'SqNum-v3pt6-Matrices', 'TargDis-v3pt6-Matrices'};
+suffixes_in = {'Type-v3pt6-Matrices', 'SqNum-v3pt6-Matrices', 'Square-v3pt6-Matrices'};
+% suffixes_in = {'TargDis-v3pt6-Matrices', 'Type-v3pt6-Matrices'};
+% suffixes_in = {'TargDis-v3pt6-Matrices_500ms', 'Type-v3pt6-Matrices_500ms'};
 
-% suffix_in = 'Type-v3pt6-Matrices';
-% suffix_out = 'Type-v3pt6';
-
-% suffix_in = 'Type-v3pt6-Peak-Matrices';
-% suffix_out = 'Type-v3pt6-Peak';
+% suffixes_out = {'Square-v3pt6-randfold', 'Type-v3pt6-randfold', 'SqNum-v3pt6-randfold', 'TargDis-v3pt6-randfold'};
+suffixes_out = {'Type-v3pt6-randfold', 'SqNum-v3pt6-randfold', 'Square-v3pt6-randfold'};
+% suffixes_out = {'TargDis-v3pt6-randfold', 'Type-v3pt6-randfold'};
+% suffixes_out = {'TargDis-v3pt6-randfold_500ms', 'Type-v3pt6-randfold_500ms'};
+params.useRandomFolds = true;
+params.nRandomizations = 10;
 
 %%
-for i=1:numel(experiments)
-    experiment = experiments{i};
-    [subjects,basedir,folders] = GetSquaresSubjects(experiment);    
-    for iSubj=1:numel(subjects)
-        fprintf('%s %s Subject %d/%d...\n',datestr(now,16),experiment,iSubj,numel(subjects));
-        cd(basedir)
-        cd(folders{iSubj});
-        file_in = sprintf('%s-%d-%s',experiment,subjects(iSubj),suffix_in);
-        file_out = sprintf('%s-%d-%s-%dfold',experiment,subjects(iSubj),suffix_out,nFolds);
-        if exist([file_out '.mat'],'file')
-            disp('Skipping!');
-        else
-            RunRidgeTrace_CrossVal(file_in,file_out,lambdas,nFolds,params);
+for j=1:numel(suffixes_out)
+    suffix_in = suffixes_in{j};
+    suffix_out = suffixes_out{j};
+    fprintf('%s === %s --> %s ===\n',datestr(now,16),suffix_in,suffix_out);
+    for i=1:numel(experiments)
+        experiment = experiments{i};
+        [subjects,basedir,folders] = GetSquaresSubjects(experiment);    
+        for iSubj=1:numel(subjects)
+            fprintf('%s %s Subject %d/%d...\n',datestr(now,16),experiment,iSubj,numel(subjects));
+            cd(basedir)
+            cd(folders{iSubj});
+            file_in = sprintf('%s-%d-%s',experiment,subjects(iSubj),suffix_in);
+            file_out = sprintf('%s-%d-%s-%dfold',experiment,subjects(iSubj),suffix_out,nFolds);
+            if exist([file_out '.mat'],'file')
+                disp('Skipping!');
+            else
+                RunRidgeTrace_CrossVal(file_in,file_out,lambdas,nFolds,params);
+            end
         end
     end
 end
+fprintf('%s === Done!\n',datestr(now,16));
 
 %% Get results
 lambda_best = zeros(1,numel(experiments));
@@ -44,14 +54,15 @@ sigmasq_foldmean = cell(1,numel(experiments));
 
 for i=1:numel(experiments)
     experiment = experiments{i};
-    subjects = subjects_cell{i};
+    [subjects, basedir, folders] = GetSquaresSubjects(experiment);  %subjects_cell{i};
     N = numel(subjects);
     sigmasq_foldmean{i} = zeros(N,numel(lambdas));
     for iSubj=1:N
         fprintf('%d/%d...\n',iSubj,N);
+        cd([basedir '/' folders{iSubj}]);
         file_out = sprintf('%s-%d-%s-%dfold',experiment,subjects(iSubj),suffix_out,nFolds);
         R = load(file_out);
-        sigmasq_foldmean{i}(iSubj,:) = mean(R.sigmasq_all,3);
+        sigmasq_foldmean{i}(iSubj,:) = mean(mean(R.sigmasq_all,3),4);
     end
     sigmasq_mean(i,:) = mean(sigmasq_foldmean{i},1);
     [~,iMin] = min(sigmasq_mean(i,:));
@@ -77,10 +88,10 @@ for i=1:numel(experiments)
     xlabel('bias param')
     ylabel('10-fold MSE')
 end
+MakeFigureTitle(suffix_out);
 
 %% Use Selected Lambda Values
 [betas,sigmasq_all,sigmasq_elec] = deal(cell(1,numel(experiments)));
-% D = 69;
 
 for i=1:numel(experiments)
     experiment = experiments{i};
@@ -89,11 +100,7 @@ for i=1:numel(experiments)
     R = load(file_in);
     p = size(R.X,2);
     D = size(R.Y,2);
-%     if strcmp(experiment,'sf3')
-%         p = 2424;
-%     else
-%         p = 1818;
-%     end
+
     N = numel(subjects);
     betas{i} = zeros(D,p,N);    
     sigmasq_all{i} = zeros(1,N);
@@ -121,8 +128,8 @@ old_suffix = 'GLMresults-Type-v3pt6-Peak';
 suffix_in = 'Type-v3pt6-Matrices';
 suffix_out = 'Type-v3pt6';
 
-% rules = {'T0vD0','T1vT0','D1vD0','T1vD0','T+vD0','D+vD0','T*vD*','D*vD0'};
-rules = {'D2vD1'};
+% rules = {'T0vD0','T1vT0','D1vD0','T1vD0','T+vD0','D+vD0','T*vD*','D*vD0'}; % All experiements
+rules = {'D2vD1','D2vD0','T2vT1','T2vT0','T2vT0'}; % SF3 only
 multcorrect = 'none';
 for iRule = 1:numel(rules)
     rule = rules{iRule};
@@ -133,13 +140,25 @@ for iRule = 1:numel(rules)
         fprintf('--- %s %s: Setting up...\n',datestr(now,16),experiment);
         % set up contrast
         R = load(sprintf('%s-%d-%s',experiment,subjects(1),old_suffix));
-        if strcmp(experiment,'sf3')
-%             iEvents = 2:25; % for RampUp or Peak
-            iEvents = 2:14; % for regular v3pt6
+        if strcmp(suffix_out(1:5),'SqNum')
+            iEvents = 1:7; % for SqNum
+        elseif strcmp(new_suffix(1:7), 'TargDis')
+            iEvents = 1:4; % for TargDis
+        elseif strcmp(new_suffix(1:5),'Square')
+            iEvents = 1:2;
+        elseif strcmp(experiment,'sf3')
+            if strcmp(suffix_out(end-3:end),'Peak') || strcmp(suffix_out(end-5:end),'RampUp')
+                iEvents = 2:25; % for RampUp or Peak
+            else
+                iEvents = 2:14; % for regular v3pt6
+            end
         else
-%             iEvents = 2:19; % for RampUp or Peak
-            iEvents = 2:12; % for regular v3pt6
-        end
+            if strcmp(suffix_out(end-3:end),'Peak') || strcmp(suffix_out(end-5:end),'RampUp')
+                iEvents = 2:19; % for RampUp or Peak
+            else
+                iEvents = 2:12; % for regular v3pt6
+            end
+        end        
         p = length(R.tResponse{end})*numel(iEvents);
         event_list = R.regressor_events{end}(iEvents);
         tResponse = R.tResponse{end};
