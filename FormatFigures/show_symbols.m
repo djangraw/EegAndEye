@@ -1,4 +1,4 @@
-function strOut = show_symbols(strIn)
+function strOut = show_symbols(strIn, invisible_chars)
 
 % Edits the string (or cell array of strings) strIn so all its special 
 % characters (especially underscores) will be displayed as-is on a plot, 
@@ -9,6 +9,8 @@ function strOut = show_symbols(strIn)
 % INPUTS:
 % - strIn is a string or cell array of string containing some characters
 % that would usually be considered 'special' by the _printf functions.
+% -invisible_chars is a cell array of strings indicating the characters
+% that you want to be preceded by a slash.
 %
 % OUTPUTS:
 % - strOut is the same as strIn, except escape characters are added so that
@@ -18,6 +20,11 @@ function strOut = show_symbols(strIn)
 % Updated 9/1/09 by DJ.
 % Updated 5/15/12 by DJ - added cell input support
 % Updated 7/13/12 by DJ - comments
+% Updated 1/15/16 by DJ - made invisible_chars an (optional) input
+
+if ~exist('invisible_chars','var') || isempty(invisible_chars)
+    invisible_chars = {'\','_','^'}; % SLASH MUST BE FIRST, IF IT'S USED!
+end
 
 strOut = strIn;
 
@@ -27,9 +34,7 @@ if iscell(strIn) % for cell arrays of strings
         strOut{i} = show_symbols(strIn{i});
     end
     
-else % for strings (typical usage)
-    
-    invisible_chars = {'\','_','^'}; % SLASH MUST BE FIRST, IF IT'S USED!
+else % for strings (typical usage)    
 
     % Add slash before each invisible character
     for i=1:numel(invisible_chars)
