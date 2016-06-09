@@ -72,7 +72,7 @@ end
 xlim([-3 0])
 
 % make the legend, then hide the plot behind it.
-legend(names,2)
+legend(names)
 set(gca,'visible','off')
 
 

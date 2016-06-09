@@ -1,19 +1,30 @@
-% TEMP_ClassifyWithPupilSize_v2
+% ClassifyWithPupilSize_v3
 %
 % Created 7/11/13 by DJ for one-time use.
+% Updated 4/29/16 by DJ - added code from GetTagScoresForEachObject.m to
+%  get each object's TAG score and save it
 
 %% Set up
+homedir = '/Users/jangrawdc/Documents/LiincData/3DSearch';
+folders = {'2013-03-27-Pilot-S22', '2013-03-28-Pilot-S23', ...
+    '2013-04-29-Pilot-S24', '2013-05-01-Pilot-S25', '2013-05-02-Pilot-S26',...
+    '2013-05-03-Pilot-S27', '2013-05-07-Pilot-S28', '2013-05-10-Pilot-S29',...
+    '2013-05-15-Pilot-S30', '2013-06-06-Pilot-S32'};
 subjects = [22:30 32];
 sessions_cell = {2:14, [3 6:17], 1:15, 1:15, 1:15, 1:15, 1:15, 1:15, [1:10 12:15], 2:16};
 offsets = [-12 -4 48 60 68 68 92 112 -32 88];
 epochRange = [-1000 4000];
 cvmode = '10fold';
+cd(homedir);
 load('TEMP_dwellFeature');
 
 %%%%% PICK FEATURES %%%%%
 useEEG = 1;
 usePS = 1;
 useDT = 1;
+%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% PICK NTRIALS %%%%%
+nSessionsToInclude = nan; % NaN for all sessions
 %%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Declare PS bins
@@ -32,13 +43,24 @@ clear R Az
 for iSubj = 1:numel(subjects);
     subject = subjects(iSubj);
     sessions = sessions_cell{iSubj};
+    % crop sessions if specified
+    if ~isnan(nSessionsToInclude) 
+        sessions = sessions(1:nSessionsToInclude);
+    end
     offset = offsets(iSubj);
     
     %% Load EEG and behavior structs
     y = loadBehaviorData(subject,sessions,'3DS');
     EEG = pop_loadset('filename',...
         sprintf('3DS-%d-all-filtered-noduds-noeog-epoched-ica.set',subject));
-
+    % crop epochs if specified
+    if ~isnan(nSessionsToInclude) 
+        isNewEpoch = [true, diff([EEG.event.epoch])>0];
+        isNewSession = diff([EEG.event(isNewEpoch).init_index])<0;        
+        epochSession = [1, cumsum(isNewSession)+1];
+        trialrej = epochSession>nSessionsToInclude;
+        EEG = pop_rejepoch(EEG,trialrej);
+    end
     %% Get eye pos and pupil size
     [ps,xeye,yeye] = deal(cell(1,numel(sessions)));
     for i=1:numel(sessions)        
@@ -63,11 +85,6 @@ for iSubj = 1:numel(subjects);
     ps_epoch_pct_baserem = ps_epoch_pct - repmat(baseline,1,size(ps_epoch,2));
 
     %% Get AUC values
-%     Az_ps = nan(1,size(ps_epoch,2));
-%     for i=1:size(ps_epoch,2)
-%         Az_ps(i) = rocarea(ps_epoch_pct_baserem(:,i),isTargetEpoch);
-%     end
-
     % Build windowed classifier
     binstart_samples = find(ismember(t_epoch,binstart));    
     binwidth_samples = round(binwidth/(t_epoch(2)-t_epoch(1)));
@@ -77,6 +94,17 @@ for iSubj = 1:numel(subjects);
     end
     bindata(isnan(bindata)) = 0; % if unknown, say no info.
     load(sprintf('ALLEEG%d_NoeogEpochedIcaCropped.mat',subject)); % ALLEEG
+    % crop epochs if specified
+    if ~isnan(nSessionsToInclude) 
+        for k=1:2
+            isNewEpoch = [true, diff([ALLEEG(k).event.epoch])>0];
+            isNewSession = diff([ALLEEG(k).event(isNewEpoch).init_index])<0;        
+            epochSession = [1, cumsum(isNewSession)+1];
+            trialrej = epochSession>nSessionsToInclude;
+            ALLEEG(k) = pop_rejepoch(ALLEEG(k),trialrej);
+        end
+    end
+    
     % Add in de-meaned dwell time
     dwellColumn = dwellFeature{iSubj}; % de-meaned dwell time
     combodata = [];
@@ -88,29 +116,10 @@ for iSubj = 1:numel(subjects);
     end
     % Classify!
     R(iSubj) = ClassifyWithEegAndDwellTime(ALLEEG,y,cvmode,offset,combodata,useEEG);
+    
     Az(iSubj) = R(iSubj).Az;
 
-    %% Plot ps
-%     clims = [min(ps_epoch_pct_baserem(:)), max(ps_epoch_pct_baserem(:))];
-%     figure;
-% 
-%     subplot(4,1,1); hold on
-%     imagesc(t_epoch,1:sum(isTargetEpoch),ps_epoch_pct_baserem(isTargetEpoch==1,:));
-%     plot([0 0],get(gca,'ylim'),'k-');
-%     set(gca,'clim',clims);
-%     axis([t_epoch(1), t_epoch(end),0.5,sum(isTargetEpoch)+0.5]);
-%     colorbar
-%     ylabel(sprintf('pupil area change\n(%% of subj mean)'))
-%     title('Target Epochs')
-% 
-%     subplot(4,1,2); hold on
-%     imagesc(t_epoch,1:sum(~isTargetEpoch),ps_epoch_pct_baserem(isTargetEpoch==0,:));
-%     plot([0 0],get(gca,'ylim'),'k-');
-%     set(gca,'clim',clims)
-%     axis([t_epoch(1), t_epoch(end),0.5,sum(~isTargetEpoch)+0.5]);
-%     colorbar
-%     ylabel(sprintf('pupil area change\n(%% of subj mean)'))
-%     title('Distractor Epochs')
+    %% Get ps plot info
 
     % Get medians & stderrors    
     ps_median_targ = nanmedian(ps_epoch_pct_baserem(isTargetEpoch==1,:),1);
@@ -118,34 +127,7 @@ for iSubj = 1:numel(subjects);
     ps_median_dist = nanmedian(ps_epoch_pct_baserem(isTargetEpoch==0,:),1);
     ps_stderr_dist = nanstd(ps_epoch_pct_baserem(isTargetEpoch==0,:),[],1)/sqrt(sum(isTargetEpoch==0));
 
-%     % plot
-%     subplot(4,1,3); hold on;
-%     % plot(t_epoch,[ps_median_targ; ps_median_dist; ps_median_targ - ps_median_dist]);
-%     plot(t_epoch,ps_median_targ,'r','linewidth',2);
-%     plot(t_epoch,ps_median_dist,'b','linewidth',2);
-%     plot(t_epoch,ps_median_targ - ps_median_dist,'g','linewidth',2);
-%     ErrorPatch(t_epoch,ps_median_targ,ps_stderr_targ,'r','r');
-%     ErrorPatch(t_epoch,ps_median_dist,ps_stderr_dist,'b','b');
-%     plot(t_epoch,ps_median_targ - ps_median_dist,'g','linewidth',2);
-%     plot([t_epoch(1) t_epoch(end)],[0 0],'k-');
-%     plot([0 0],get(gca,'ylim'),'k-');
-%     set(colorbar,'Visible','off') % dummy colorbar to make axes line up
-%     legend('Target (+/- stderr)','Distractor(+/- stderr)','Difference','Location','NorthWest');
-%     ylabel(sprintf('Median pupil area change\n(%% of subj mean)'))
-% 
-%     subplot(4,1,4); hold on
-%     plot(t_epoch,Az_ps);
-%     set(colorbar,'Visible','off') % dummy colorbar to make axes line up
-%     ylabel('AUC')
-%     xlabel('Time from saccade to object (ms)');
-%     plot([t_epoch(1) t_epoch(end)],[0.5 0.5],'k-');
-%     plot([0 0],get(gca,'ylim'),'k-');
-% 
-%     MakeFigureTitle(sprintf('Subject %d Pupil Area ([%d %d] ms baseline)',subject,tBaseline(1),tBaseline(2)),0);
-%     
-%     % Add to results
-%     xeye_all{iSubj} = xeye_epoch;
-%     Az_ps_all(iSubj,:) = Az_ps;
+    % Add to results
     ps_median_targ_all(iSubj,:) = ps_median_targ;
     ps_median_dist_all(iSubj,:) = ps_median_dist;
     ps_all{iSubj} = ps_epoch_pct_baserem;
@@ -179,37 +161,79 @@ chance.pctFound = [20/56*.25*100 25];
 chance.pctDistance = 100;
 
 
-%% Plot cross-subject averages
-% figure;
-% set(gcf,'Position',[1000 992 733 486]);
-% % subplot(2,1,1); 
-% clf; hold on;
-% set(gca,'box','on','fontname',fontname,'fontsize',fontsize)
-% mtarg = mean(ps_median_targ_all,1);
-% mdist = mean(ps_median_dist_all,1);
-% mdiff = mean(ps_median_targ_all - ps_median_dist_all,1);
-% starg = std(ps_median_targ_all,[],1)/sqrt(numel(subjects));
-% sdist = std(ps_median_dist_all,[],1)/sqrt(numel(subjects));
-% sdiff = std(ps_median_targ_all - ps_median_dist_all,[],1)/sqrt(numel(subjects));
-% 
-% 
-% plot(t_epoch,mdist,'b','linewidth',2);
-% plot(t_epoch,mtarg,'r','linewidth',2);
-% % plot(t_epoch,mdiff,'g','linewidth',2);
-% ErrorPatch(t_epoch,mdist,sdist,'b','b');
-% ErrorPatch(t_epoch,mtarg,starg,'r','r');
-% % ErrorPatch(t_epoch,mdiff,sdiff,'g','g');
-% plot([t_epoch(1) t_epoch(end)],[0 0],'k-');
-% plot([0 0],get(gca,'ylim'),'k-');
-% set(colorbar,'Visible','off') % dummy colorbar to make axes line up
-% % legend('Target','Distractor','Difference','Location','NorthWest');
-% legend('Distractors','Targets','Location','NorthEast');
-% ylabel(sprintf('Median pupil area change\n(%% of subj mean)\nmean +/- stderr across subjects'))
-% xlabel('Time from first saccade to object (ms)');
-% % subplot(2,1,2); hold on
-% % ErrorPatch(t_epoch,mean(Az_ps_all,1),std(Az_ps_all,[],1)/sqrt(numel(subjects)),'b','b');
-% % set(colorbar,'Visible','off') % dummy colorbar to make axes line up
-% % ylabel(sprintf('AUC\nmean +/- stderr across subjects'))
-% % xlabel('Time from saccade to object (ms)');
-% % plot([t_epoch(1) t_epoch(end)],[0.5 0.5],'k-');
-% % plot([0 0],get(gca,'ylim'),'k-');
+
+
+%% %% Get object lists
+[objName, objTagScore, objLocation, targetCat] = deal(cell(1,numel(subjects)));
+eyelinkoreeg='eeg';
+nRows = ceil(sqrt(numel(subjects)));
+nCols = ceil(numel(subjects)/nRows);
+xHist = linspace(0,0.07,100);
+
+for iSubject=1:numel(subjects)
+    cd(fullfile(homedir,folders{iSubject}));
+    % find all object names and categories
+    subject = subjects(iSubject);
+    sessions = sessions_cell{iSubject};
+    [objects, objectnames, objectlocations, objecttimes, objectisessions] = GetObjectList(subject,sessions,eyelinkoreeg);    
+    % find object categories    
+    iCat = nan(1,numel(objectnames));
+    for i=1:numel(categories)
+        isInCat = strncmp(categories{i},objectnames,length(categories{i}));
+        iCat(isInCat) = i;
+    end
+    
+    objName{iSubject} = objectnames';
+    objTagScore{iSubject} = plotInfos{iSubject}.tagScore';
+    objLocation{iSubject} = plotInfos{iSubject}.objlocs;
+    
+    % Infer target category
+    iTargetCat = unique(iCat(plotInfos{iSubject}.iTargets));
+    targetCat{iSubject} = categories{iTargetCat};
+
+    % Make histogram for each subject/category
+    xHist = linspace(0,max(objTagScore{iSubject}),50);
+    histCatTagScore = zeros(numel(xHist),numel(categories));
+    legendstr = cell(size(categories));
+    for i=1:numel(categories)
+        histCatTagScore(:,i) = hist(objTagScore{iSubject}(iCat==i),xHist);
+        if i==iTargetCat
+            legendstr{i} = [categories{i} '*'];
+        else
+            legendstr{i} = categories{i};
+        end
+    end
+
+    % Plot results
+    subplot(nRows,nCols,iSubject);
+    plot(histCatTagScore);
+    legend(legendstr,'interpreter','none');
+    xlabel('TAG score')
+    ylabel('# objects')
+    title(sprintf('Subject %d histogram',subject));
+    
+end
+
+
+
+
+%% Save results
+README = 'objName{i}{j} is the name of object #j in the environment of subject number subjects(i). objLocation{i}(j,:) is the x,y location of the object for plotting. objTagScore{i}(j) is the TAG score for object number j from the classifier of subject number subjects(i). The instructed target category for that subject was targetCat{i}.';
+suffix = '';
+if useEEG
+    suffix = [suffix 'eeg'];
+end
+if usePS
+    suffix = [suffix 'ps'];
+end
+if useDT
+    suffix = [suffix 'dt'];
+end
+if isnan(nSessionsToInclude)
+    fprintf('Saving %s/TagScoresForEachObject_%s.mat...\n',homedir,suffix);
+    save(sprintf('%s/TagScoresForEachObject_%s.mat',homedir,suffix),'subjects','categories','objName','objTagScore','targetCat','README');
+else
+    fprintf('Saving %s/TagScoresForEachObject_%s_%02dsess.mat...\n',homedir,suffix,nSessionsToInclude);
+    save(sprintf('%s/TagScoresForEachObject_%s_%02dsess.mat',homedir,suffix,nSessionsToInclude),'subjects','categories','objName','objTagScore','targetCat','README');
+end
+fprintf('Done!\n');

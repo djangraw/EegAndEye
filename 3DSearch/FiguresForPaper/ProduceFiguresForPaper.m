@@ -22,6 +22,7 @@ sessions_cell = {2:14, [3 6:17], 1:15, 1:15, 1:15, 1:15, 1:15, 1:15, [1:10 12:15
 offsets = [-12 -4 48 60 68 68 92 112 -32 88];
 fracSensitivity = 0.9999999; % used to calculate nSensitivity
 homedir = '/Users/dave/Documents/Data/3DSearch';
+homedir = '/Users/jangrawdc/Documents/LiincData/3DSearch';
 cvmode = '10fold';
 usegridconstraints = true;
 levelname = 'GridHuge.jpg';
